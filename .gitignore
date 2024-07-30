@@ -1,0 +1,15 @@
+/docker/volumes
+/data/
+
+**/result/
+**/results/
+
+**/__pycache__/
+
+*.pyc
+*.lock
+
+/dist
+/build
+
+**/*.egg-info

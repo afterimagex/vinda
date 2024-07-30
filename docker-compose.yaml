@@ -1,0 +1,51 @@
+version: '3'
+services:
+  
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: vinda-minio
+  #   restart: always
+  #   ports:
+  #     - "8588:9000"
+  #     - "8589:9001"
+  #   environment:
+  #     MINIO_ACCESS_KEY: vinda1234
+  #     MINIO_SECRET_KEY: vinda1234
+  #   volumes:
+  #     - ./volumes/minio/data:/data
+  #     - ./volumes/minio/config:/root/.minio
+  #   command: server /data --console-address "0.0.0.0:9001"
+
+  redis:
+    image: redis
+    container_name: vinda-redis
+    # restart: always
+    # networks:
+      # - flapllm-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - vinda-vol-redis:/data
+    command:
+      - "redis-server"
+      - "--requirepass vinda1234"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vinda-api
+    ports:
+      - "8081:8081"
+    command: "poetry run uvicorn api:api --host 0.0.0.0 --reload"
+
+  task:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vinda-task
+    command: "celery -A vinda.api.worker.celery_tasks worker -E --pool=solo --loglevel=info --logfile=/tmp/celery.log"
+
+volumes:
+  vinda-vol-redis:
+    name: vinda-vol-redis
