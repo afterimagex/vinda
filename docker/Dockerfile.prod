@@ -1,0 +1,15 @@
+FROM vinda:base
+
+ARG whlfile
+ARG modelfile
+
+WORKDIR /workspace/vinda
+
+ADD ${modelfile} /root/.cache/huggingface/hub/
+
+COPY ${whlfile} .
+
+RUN pip install --no-cache-dir -U pip && \
+    pip config set global.index-url https://mirrors.aliyun.com/pypi/simple && \
+    pip install vinda-*.whl && \
+    rm vinda-*.whl

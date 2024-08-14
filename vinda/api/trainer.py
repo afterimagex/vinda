@@ -17,6 +17,8 @@ from vinda.api import schemas
 from vinda.api.config import cfg
 from celery import current_task
 
+from loguru import logger
+
 # torch.multiprocessing.set_start_method('spawn')
 
 def get_optimizer(solver_config : schemas.SolverConfig, parameters) -> torch.optim.Optimizer:
@@ -69,6 +71,9 @@ def get_lr_scheduler_config(solver_config : schemas.SolverConfig, optimizer: tor
 
 class ImageTransform:
     def __init__(self, is_train: bool, img_size: int | tuple = 112):
+        if isinstance(img_size, int):
+            img_size = (img_size, img_size)
+
         if is_train:
             self.transform = transforms.Compose(
                 [
@@ -210,18 +215,22 @@ class SimpleModel(LightningModule):
         acc = self.train_acc(pred, target)
         self.log_dict({'train_loss': loss, 'train_acc': acc}, prog_bar=True)
 
+        meta_info = {
+            'stage': 'training',
+            'current_epoch': self.current_epoch,
+            'max_epochs': self.trainer.max_epochs,
+            'current_batch': batch_idx,
+            'num_batches': self.trainer.num_training_batches,
+            'loss': loss.item(),
+            'acc': acc.item(),
+        }
+        
         current_task.update_state(
             state='PROGRESS',
-            meta={
-                'mode': 'training',
-                'current_epoch': self.current_epoch,
-                'max_epochs': self.trainer.max_epochs,
-                'current_batch': batch_idx,
-                'num_batches': self.trainer.num_training_batches,
-                'loss': loss.item(),
-                'acc': acc.item(),
-            }
+            meta=meta_info
         )
+        
+        # logger.debug(meta_info)
 
         return loss
 
@@ -235,24 +244,28 @@ class SimpleModel(LightningModule):
         acc = self.val_acc(pred, target)
         self.log_dict({'val_loss': loss, 'val_acc': acc})
 
+        meta_info = {
+            'stage': 'validation',
+            'current_epoch': self.current_epoch,
+            'max_epochs': self.trainer.max_epochs,
+            'current_batch': batch_idx,
+            'num_batches': sum(self.trainer.num_val_batches),
+            'loss': loss.item(),
+            'acc': acc.item(),
+        }
+        
         current_task.update_state(
             state='PROGRESS',
-            meta={
-                'mode': 'validation',
-                'current_epoch': self.current_epoch,
-                'max_epochs': self.trainer.max_epochs,
-                'current_batch': batch_idx,
-                'num_batches': sum(self.trainer.num_val_batches),
-                'loss': loss.item(),
-                'acc': acc.item(),
-            }
+            meta=meta_info
         )
+
+        # logger.debug(meta_info)
 
         if batch_idx == 1:
             tb_logger = None
-            for logger in self.trainer.loggers:
-                if isinstance(logger, TensorBoardLogger):
-                    tb_logger = logger.experiment
+            for tlogger in self.trainer.loggers:
+                if isinstance(tlogger, TensorBoardLogger):
+                    tb_logger = tlogger.experiment
                     break
             if tb_logger is None:
                 raise ValueError('TensorBoard Logger not found')
@@ -316,7 +329,7 @@ def get_trainer(trainning_config : schemas.TrainingConfig) -> Trainer:
     trainer = Trainer(
         max_epochs=trainning_config.epochs,
         callbacks=callbacks,
-        default_root_dir=cfg.trainer.outdir,
+        default_root_dir=cfg.trainer.output,
         accelerator=accelerator,
         devices=devices,
         strategy=strategy,

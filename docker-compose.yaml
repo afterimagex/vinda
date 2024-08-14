@@ -16,36 +16,88 @@ services:
   #     - ./volumes/minio/config:/root/.minio
   #   command: server /data --console-address "0.0.0.0:9001"
 
-  redis:
+  vinda-redis:
     image: redis
     container_name: vinda-redis
     # restart: always
-    # networks:
-      # - flapllm-network
-    ports:
-      - "6379:6379"
+    networks:
+      - vinda-net
     volumes:
       - vinda-vol-redis:/data
     command:
       - "redis-server"
       - "--requirepass vinda1234"
 
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  vinda-api:
+    image: vinda:prod
     container_name: vinda-api
+    networks:
+      - vinda-net
     ports:
       - "8081:8081"
-    command: "poetry run uvicorn api:api --host 0.0.0.0 --reload"
+    command: "uvicorn vinda.api.app:app --host 0.0.0.0 --port 8081 --reload"
+    environment:
+      - CELERY_BROKER_URL=redis://:vinda1234@vinda-redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:vinda1234@vinda-redis:6379/1
+      - LOG_NAME=api
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - vinda-vol-data:/data
+    depends_on:
+      - vinda-redis
+      - vinda-task
 
-  task:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  vinda-task:
+    image: vinda:prod
     container_name: vinda-task
-    command: "celery -A vinda.api.worker.celery_tasks worker -E --pool=solo --loglevel=info --logfile=/tmp/celery.log"
+    networks:
+      - vinda-net
+    command: "celery -A vinda.api.worker.celery_tasks worker -E --pool=solo --loglevel=info --logfile=/data/output/logs/celery.log"
+    environment:
+      - HF_ENDPOINT=https://hf-mirror.com
+      - CELERY_BROKER_URL=redis://:vinda1234@vinda-redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:vinda1234@vinda-redis:6379/1
+      - LOG_NAME=task
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      - vinda-redis
+    volumes:
+      - vinda-vol-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities:
+                - gpu
+
+  tensorboard:
+    image: vinda:prod
+    container_name: vinda-tensorboard
+    networks:
+      - vinda-net
+    ports:
+      - "6006:6006"
+    command: "tensorboard --logdir=/data/output --port=6006 --bind_all"
+    volumes:
+      - vinda-vol-data:/data
+    depends_on:
+      - vinda-api
+      - vinda-task
 
 volumes:
   vinda-vol-redis:
     name: vinda-vol-redis
+
+  vinda-vol-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+
+networks:
+  vinda-net:
+    driver: bridge
+    name: vinda-net

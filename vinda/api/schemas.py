@@ -1,5 +1,12 @@
-from typing import Union, Optional
+from typing import Union, Optional, Dict, List
 from pydantic import BaseModel, Field
+
+
+class Response(BaseModel):
+    code: int = Field(default=0, description='response code')
+    message: str = Field(default="success", description="response message")
+    traceback: Optional[List] = Field(default=None, description="error traceback for debug")
+    data: Optional[Dict] = Field(default=None, description="response data")
 
 
 class SolverConfig(BaseModel):
@@ -27,12 +34,13 @@ class SolverConfig(BaseModel):
 
 class TrainingConfig(BaseModel):
     dataset: str = Field(..., description='数据集名称')
-    model_name: str = Field('resnet18', description='模型名称')
-    img_size: int = Field(112, description='输入网络的图像尺寸（自动resize）')
+    name_model: str = Field('hf_hub:timm/mobilenetv4_conv_small.e2400_r224_in1k', description='模型名称')
+    pretrain_model: str = Field('', description='预训练模型')
+    img_size: int = Field(224, description='输入网络的图像尺寸（自动resize）')
     epochs: int = Field(100, description='训练周期数')
     save_interval: int = Field(1, description='保存模型的间隔（按周期计算）')
     batch_size: int = Field(8, description='每批处理的样本数量')
-    num_workers: int = Field(12, description='工作进程数')
+    num_workers: int = Field(0, description='工作进程数')
     gpu_ids: Optional[list] = Field(default=None, description='使用的GPU编号列表')
     n_gpu: Optional[int] = Field(default=None, description='使用的GPU数量')
     seed: int = Field(42, description='随机种子，用于结果的可复现性')
@@ -46,3 +54,16 @@ class TrainingConfig(BaseModel):
 
         if 'solver' not in data:
             self.solver = SolverConfig()
+
+
+class ExportConfig(BaseModel):
+    path_model: str = Field('/data/output/lightning_logs/version_9/checkpoints/model-xx.ckpt', description='模型路径')
+    path_param: str = Field('/data/output/lightning_logs/version_9/hparams.yaml', description='配置路径')
+    tag: str = Field('cls_', description='标签')
+    format: str = Field('onnx', description='模型导出格式,目前仅支持onnx')
+
+
+class InferenceConfig(BaseModel):
+    path_model: str = Field('/data/output/exported/model-xx.onnx', description='onnx模型路径')
+    path_image: str = Field('/data/output/example.jpg', description='测试图片路径')
+    img_size: int = Field(224, description='输入网络的图像尺寸（自动resize）')

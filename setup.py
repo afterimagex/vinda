@@ -128,7 +128,9 @@ def split_cythonize_extensions(pkg_name: str, complie_files: List[str]):
 
 if __name__ == "__main__":
     keep_files, cythonize_files, ext_modules = split_cythonize_extensions('vinda', complie_files=[
-        'api/trainer.py'
+        'api/utils.py',
+        'api/onnxinfer.py',
+        'api/worker/celery_tasks.py',
     ])
 
     try:
@@ -170,7 +172,7 @@ if __name__ == "__main__":
             # }
             entry_points={
                 'console_scripts': [
-                    'vinda=flap.wrapped_cli_tool:main'
+                    # 'vinda=uvicorn vinda.api.app:app'
                 ],
                 # 'celery.commands': [
                 #     'flower = flower.command.FlowerCommand',
