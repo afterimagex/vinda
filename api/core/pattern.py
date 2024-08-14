@@ -1,17 +1,18 @@
 import functools
+from traceback import format_exception
+
+from fastapi import HTTPException
+from loguru import logger
 
 from vinda.api import schemas
-from loguru import logger
-from traceback import format_exception
-from fastapi import HTTPException
 
 
-class SingletonBase(type):
+class SingletonMeta(type):
     _instances = {}
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
-            cls._instances[cls] = super(SingletonBase, cls).__call__(*args, **kwargs)
+            cls._instances[cls] = super(SingletonMeta, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
 
 
@@ -29,4 +30,5 @@ def response_handle(func):
             logger.error(response)
             raise HTTPException(status_code=500, detail=response.message)
             # return response
+
     return wrapper

@@ -14,3 +14,5 @@
 /hf-cache
 
 **/*.egg-info
+
+.env

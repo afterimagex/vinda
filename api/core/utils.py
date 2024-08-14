@@ -1,13 +1,11 @@
-
-
 # import cv2
 import contextlib
 import datetime
 import time
-import numpy as np
-
-from PIL import Image
 from pathlib import Path, PosixPath
+
+import numpy as np
+from PIL import Image
 
 
 def get_path_tree(path: str | PosixPath):
@@ -18,16 +16,16 @@ def get_path_tree(path: str | PosixPath):
         path = Path(path)
 
     tree = {
-        'name': path.name,
-        'type': 'directory' if path.is_dir() else 'file',
-        'children': []
+        "name": path.name,
+        "type": "directory" if path.is_dir() else "file",
+        "children": [],
     }
-    
+
     if path.is_dir():
         with path.resolve() as p:
             for child in p.iterdir():
-                tree['children'].append(get_path_tree(child))
-                
+                tree["children"].append(get_path_tree(child))
+
     return tree
 
 
@@ -35,11 +33,11 @@ class Timer(object):
     """A simple timer."""
 
     def __init__(self):
-        self.total_time = 0.
+        self.total_time = 0.0
         self.calls = 0
-        self.start_time = 0.
-        self.diff = 0.
-        self.average_time = 0.
+        self.start_time = 0.0
+        self.diff = 0.0
+        self.average_time = 0.0
 
     def add_diff(self, diff, average=True):
         self.total_time += diff
@@ -88,7 +86,7 @@ class Timer(object):
 
         """
         return dict([(k, Timer()) for k in args])
-   
+
 
 def get_progress_info(timer, curr_step, max_steps):
     """Return a info of current progress.
@@ -111,9 +109,10 @@ def get_progress_info(timer, curr_step, max_steps):
     average_time = timer.average_time
     eta_seconds = average_time * (max_steps - curr_step)
     eta = str(datetime.timedelta(seconds=int(eta_seconds)))
-    progress = (curr_step + 1.) / max_steps
-    return '< PROGRESS: {:.2%} | SPEED: {:.3f}s / iter | ETA: {} >' \
-        .format(progress, timer.average_time, eta)
+    progress = (curr_step + 1.0) / max_steps
+    return "< PROGRESS: {:.2%} | SPEED: {:.3f}s / iter | ETA: {} >".format(
+        progress, timer.average_time, eta
+    )
 
 
 def export_onnx_model(model, file):
@@ -146,7 +145,7 @@ def export_onnx_model(model, file):
 #         return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
 #     elif len(N) == 4:
 #         return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGBA2BGR)
-    
+
 
 # def get_pil_image(image):
 #     '''

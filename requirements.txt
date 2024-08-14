@@ -10,3 +10,4 @@ onnx==1.16.2
 onnxruntime==1.18.1
 sqlalchemy==2.0.32
 aiofiles==24.1.0
+pydantic-settings==2.4.0
