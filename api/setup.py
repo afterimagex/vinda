@@ -12,51 +12,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''
+"""
 Usage:
 
 bdist_wheel sdist
-'''
+"""
 
+import atexit
 import os
 import os.path as osp
 import subprocess
-
-import Cython
-
+import traceback
+from pathlib import Path
 from typing import List
 
-from pathlib import Path
+import Cython
 from Cython.Build import cythonize
-from setuptools import setup, Extension
-
-import traceback
+from setuptools import Extension, setup
 
 # ==============  version definition  ==============
 
-PKG_NAME = 'vinda'
+PKG_NAME = "flowpilot"
 PKG_VERSION = "0.1.0"
 Cython.language_level = 3
 
 
 def parse_version():
-    return PKG_VERSION.replace('-', '')
+    return PKG_VERSION.replace("-", "")
 
 
 def git_commit():
     try:
-        cmd = ['git', 'rev-parse', 'HEAD']
-        git_commit = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE, ).communicate()[0].strip()
+        cmd = ["git", "rev-parse", "HEAD"]
+        git_commit = (
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+            )
+            .communicate()[0]
+            .strip()
+        )
         git_commit = git_commit.decode()
     except:
-        git_commit = 'Unknown'
+        git_commit = "Unknown"
 
     return str(git_commit)
 
 
-def write_version_py(filename='vinda/version.py'):
+def write_version_py(filename="flowpilot/version.py"):
     ver_str = """# THIS FILE IS GENERATED FROM PADDLEPADDLE SETUP.PY
 #
 full_version    = '%(version)s'
@@ -64,15 +67,15 @@ commit          = '%(commit)s'
 """
 
     _git_commit = git_commit()
-    with open(filename, 'w') as f:
-        f.write(ver_str % {'version': PKG_VERSION, 'commit': _git_commit})
+    with open(filename, "w") as f:
+        f.write(ver_str % {"version": PKG_VERSION, "commit": _git_commit})
 
 
 write_version_py()
 
 
 def readme(fname):
-    with open(fname, encoding='utf-8') as f:
+    with open(fname, encoding="utf-8") as f:
         content = f.read()
     return content
 
@@ -102,24 +105,30 @@ def split_cythonize_extensions(pkg_name: str, complie_files: List[str]):
     complie_files_fullpath = [this_dir / pkg_name / x for x in complie_files]
 
     extension_args = {
-        'extra_compile_args': ['/DWIN32', '/DWIN64'] if os.name == 'nt' else ['-Os', '-g0'],
-        'extra_link_args': ['/MACHINE:X64'] if os.name == 'nt' else ['-Wl,--strip-all'],
+        "extra_compile_args": (
+            ["/DWIN32", "/DWIN64"] if os.name == "nt" else ["-Os", "-g0"]
+        ),
+        "extra_link_args": ["/MACHINE:X64"] if os.name == "nt" else ["-Wl,--strip-all"],
     }
 
-    keep_files, cythonize_files, extensions = [], [], [] 
+    keep_files, cythonize_files, extensions = [], [], []
 
-    for filename in Path(this_dir / pkg_name).rglob('*.py'):
-        if filename.name == '__init__.py' or filename not in complie_files_fullpath:
+    for filename in Path(this_dir / pkg_name).rglob("*.py"):
+        if filename.name == "__init__.py" or filename not in complie_files_fullpath:
             keep_files.append(str(filename))
         else:
-            cythonize_files.append(filename.with_suffix('.c'))
-            module_path = filename.relative_to(this_dir).with_suffix('')
-            module_name = '.'.join(str(module_path).split(osp.sep))
-            extensions.append(Extension(
-                module_name, sources=[str(filename.relative_to(this_dir))], **extension_args
-            ))
-    
-    delete_files(cythonize_files)
+            cythonize_files.append(filename.with_suffix(".c"))
+            module_path = filename.relative_to(this_dir).with_suffix("")
+            module_name = ".".join(str(module_path).split(osp.sep))
+            extensions.append(
+                Extension(
+                    module_name,
+                    sources=[str(filename.relative_to(this_dir))],
+                    **extension_args,
+                )
+            )
+
+    atexit.register(delete_files, cythonize_files)
 
     ext_modules = cythonize(extensions, quiet=True, language_level=3)
 
@@ -127,43 +136,42 @@ def split_cythonize_extensions(pkg_name: str, complie_files: List[str]):
 
 
 if __name__ == "__main__":
-    keep_files, cythonize_files, ext_modules = split_cythonize_extensions('vinda', complie_files=[
-        'api/utils.py',
-        'api/onnxinfer.py',
-        'api/worker/celery_tasks.py',
-    ])
+    keep_files, cythonize_files, ext_modules = split_cythonize_extensions(
+        "flowpilot", complie_files=[]
+    )
 
     try:
         setup(
             name=PKG_NAME,
             packages=[""],
-            package_data={'': keep_files + []},
+            package_data={"": keep_files + []},
             data_files=[
                 # ('docker', [osp.abspath('docker/product/Dockerfile')]),
                 # ('images', [osp.abspath(x) for x in glob.glob('images/*')])
             ],
-            author='Blank',
+            author="Blank",
             version=parse_version(),
-            install_requires=parse_requirements('./requirements.txt'),
-            description='vinda',
-            long_description=readme('./README.md'),
-            long_description_content_type='text/markdown',
-            url='https://',
-            download_url='',
-            keywords=['vinda'],
+            install_requires=parse_requirements("./requirements.txt"),
+            description="flowpilot",
+            long_description=readme("./README.md"),
+            long_description_content_type="text/markdown",
+            url="https://",
+            download_url="",
+            keywords=["flowpilot"],
             classifiers=[
-                'Intended Audience :: Developers',
-                'License :: OSI Approved :: Apache Software License',
-                'Operating System :: OS Independent',
-                'Natural Language :: Chinese (Simplified)',
-                'Programming Language :: Python :: 3',
-                'Programming Language :: Python :: 3.8',
-                'Programming Language :: Python :: 3.9',
-                'Programming Language :: Python :: 3.10',
-                'Programming Language :: Python :: 3.11',
-                'Programming Language :: Python :: 3.12', 'Topic :: Utilities'
+                "Intended Audience :: Developers",
+                "License :: OSI Approved :: Apache Software License",
+                "Operating System :: OS Independent",
+                "Natural Language :: Chinese (Simplified)",
+                "Programming Language :: Python :: 3",
+                "Programming Language :: Python :: 3.8",
+                "Programming Language :: Python :: 3.9",
+                "Programming Language :: Python :: 3.10",
+                "Programming Language :: Python :: 3.11",
+                "Programming Language :: Python :: 3.12",
+                "Topic :: Utilities",
             ],
-            license='Apache License 2.0',
+            license="Apache License 2.0",
             # script_args=["build_ext", "-b", "build", "-t", "build/temp"],
             ext_modules=ext_modules,
             # cmdclass={'build_ext': build_ext},
@@ -171,15 +179,13 @@ if __name__ == "__main__":
             #     'install_scripts': InstallScripts,
             # }
             entry_points={
-                'console_scripts': [
+                "console_scripts": [
                     # 'vinda=uvicorn vinda.api.app:app'
                 ],
                 # 'celery.commands': [
                 #     'flower = flower.command.FlowerCommand',
                 # ],
-            }
+            },
         )
     except Exception as e:
         traceback.print_exc()
-    finally:
-        delete_files(cythonize_files)

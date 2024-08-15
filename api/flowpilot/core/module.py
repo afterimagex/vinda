@@ -1,8 +1,10 @@
+import asyncio
+import functools
 import traceback
 import weakref
 from abc import ABC
-from collections import OrderedDict
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from collections import OrderedDict, defaultdict, deque
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from easydict import EasyDict
 
@@ -54,7 +56,7 @@ class UObject(ABC):
 
     def __init__(self, name: Optional[str] = None, ctx: Optional[UContext] = None):
         self._ctx = ctx
-        self._name = name if name else self.__class__.__name__
+        self._name = name if name else f"{self.__class__.__name__}_{id(self)}"
 
     @property
     def name(self) -> str:
@@ -241,14 +243,3 @@ class Runner(UModule):
     def finally_destroy(self):
         super().finally_destroy()
         self._ctx.destroy()
-
-
-# if __name__ == "__main__":
-#     app = App(
-#         childs=[
-#             RedisComponent(),
-#             CeleryComponent(),
-#         ]
-#     )
-#     print(1)
-#     app.run()
