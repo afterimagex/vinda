@@ -33,36 +33,26 @@ class Task(UTaskNode, metaclass=ABCMeta):
     def __init__(
         self,
         name: Optional[str] = None,
-        deps: Optional[Set[str]] = None,
+        deps: Optional[Set] = None,
     ):
         super().__init__(name)
-
         self.input = None
         self.output = None
+        self.dependencies = set(deps) if deps else set()
 
-        if deps is None:
-            self.dependencies = set()
-        elif isinstance(deps, str):
-            self.dependencies = {deps}
-        elif isinstance(deps, list):
-            self.dependencies = set(deps)
-        else:
-            self.dependencies = deps
-
-    async def execute(self, *args, **kwargs):
-        print(f"Running {self.name} with input {self.input}")
+    async def execute(self, payloads):
+        # print(f"Running {self.name} with input {self.input}", time.time())
         await asyncio.sleep(1)
         self.output = f"+{self.name}.{self.input}"
-        print(f"Completed {self.name} with output {self.output}")
+        print(f"Completed {self.name} with output {self.output}", time.time())
 
 
 class Sequential(Task):
     def __init__(
         self,
-        name: Optional[str] = None,
-        deps: Optional[Set[str]] = None,
-        *,
         tasks: List[Task],
+        name: Optional[str] = None,
+        deps: Optional[Set] = None,
     ) -> None:
         super().__init__(name, deps)
         self._tasks = {task.name: task for task in tasks}
@@ -72,18 +62,17 @@ class Sequential(Task):
             raise ValueError(f"Task {task.name} already exists.")
         self._tasks[task.name] = task
 
-    async def execute(self, *args, **kwargs):
+    async def execute(self, payloads):
         for task in self._tasks.values():
-            await task.execute(*args, **kwargs)
+            await task.execute(payloads)
 
 
 class Parallel(Task):
     def __init__(
         self,
+        tasks: List[Task],
         name: Optional[str] = None,
         deps: Optional[Set[str]] = None,
-        *,
-        tasks: List[Task],
     ) -> None:
         super().__init__(name, deps)
         self._tasks = {task.name: task for task in tasks}
@@ -122,7 +111,7 @@ class Parallel(Task):
         self._tasks[task.name] = task
         self._sorted_task_names, self._reverse_dependencies = self._topological_sort()
 
-    async def execute(self, *args, **kwargs):
+    async def execute(self, payloads):
         sorted_task_names = self._sorted_task_names.copy()
         reverse_dependencies = self._reverse_dependencies
 
@@ -131,7 +120,7 @@ class Parallel(Task):
         # self._tasks[sorted_task_names[0]].input = initial_input
 
         task_coroutines = {
-            name: task.execute(*args, **kwargs) for name, task in self._tasks.items()
+            name: task.execute(payloads) for name, task in self._tasks.items()
         }
         completed_tasks = set()
 
@@ -159,7 +148,16 @@ class Parallel(Task):
                     self._tasks[dependent_name].input = self._tasks[name].output
 
 
-class ConditionalBranch(UTaskNode):
+class Workflow(Task):
+    def __init__(self, tasks: List[Task]):
+        self._tasks = {task.name: task for task in tasks}
+
+    async def execute(self):
+        payloads = {}
+        await asyncio.gather(*[task.execute(payloads) for task in self._tasks.values()])
+
+
+class ConditionalBranch(Task):
     def __init__(
         self,
         condition: Callable[[Any], bool],
@@ -175,28 +173,6 @@ class ConditionalBranch(UTaskNode):
             await self._true_branch.run()
         else:
             await self._false_branch.run()
-
-
-class Workflow(UTaskNode):
-    def __init__(self, tasks: List[UTaskNode]):
-        self._tasks = {task.name: task for task in tasks}
-
-    async def execute(self, initial_input):
-        pass
-
-
-# async def run_workflow(tasks, initial_input=None):
-#     sorted_task_names, reverse_dependencies = topological_sort(tasks)
-
-#     # 初始化第一个任务的输入
-#     if initial_input is not None:
-#         tasks[sorted_task_names[0]].input = initial_input
-
-#     for task_name in sorted_task_names:
-#         task = tasks[task_name]
-#         await task.run()
-#         for dependent_name in reverse_dependencies[task_name]:
-#             tasks[dependent_name].input = task.output
 
 
 # def plot_workflow(filename):
@@ -228,17 +204,7 @@ class Workflow(UTaskNode):
 #     plt.show()
 
 
-async def runwf(wf):
-    wf = [x.run("1") for x in wf]
-    await asyncio.gather(*wf)
-
-
 if __name__ == "__main__":
-    # task_s = Task("S", func_a)
-    # task_a = Task("A", func_a, deps=[task_s.name])
-    # task_b = Task("B", func_b, deps=[task_a.name])
-    # task_c = Task("C", func_c, deps=[task_a.name])
-    # task_d = Task("D", func_d, deps=[task_b.name, task_c.name])
 
     # tasks = {
     #     task_s.name: task_s,
@@ -249,46 +215,43 @@ if __name__ == "__main__":
     # }
 
     tc = Sequential(
-        tasks=[
+        [
             Parallel(
-                tasks=[
+                [
                     Parallel(
-                        "P1",
-                        tasks=[
+                        [
                             Task("P1.S"),
                             Task("P1.A", deps=["P1.S"]),
-                            Task("P1.B", deps=["P1.A"]),
-                            Task("P1.C", deps=["P1.A"]),
+                            Task("P1.B", deps=["P1.S"]),
+                            Task("P1.C", deps=["P1.S"]),
                             Task("P1.D", deps=["P1.B", "P1.C"]),
                         ],
+                        "P1",
                     ),
                     Parallel(
-                        "P2",
-                        deps=["P3"],
-                        tasks=[
+                        [
                             Task("P2.S"),
                             Task("P2.A", deps=["P2.S"]),
-                            Task("P2.B", deps=["P2.A"]),
-                            Task("P2.C", deps=["P2.A"]),
+                            Task("P2.B", deps=["P2.S"]),
+                            Task("P2.C", deps=["P2.S"]),
                             Task("P2.D", deps=["P2.B", "P2.C"]),
                         ],
+                        "P2",
                     ),
                     Parallel(
-                        "P3",
-                        deps=["P1"],
-                        tasks=[
+                        [
                             Task("P3.S"),
                             Task("P3.A", deps=["P3.S"]),
-                            Task("P3.B", deps=["P3.A"]),
-                            Task("P3.C", deps=["P3.A"]),
+                            Task("P3.B", deps=["P3.S"]),
+                            Task("P3.C", deps=["P3.S"]),
                             Task("P3.D", deps=["P3.B", "P3.C"]),
                         ],
+                        "P3",
                     ),
                 ]
             ),
             Parallel(
-                "P4",
-                tasks=[
+                [
                     Task("P4.S"),
                     Task("P4.A", deps=["P4.S"]),
                     Task("P4.B", deps=["P4.A"]),
@@ -299,59 +262,9 @@ if __name__ == "__main__":
         ]
     )
 
-    # tc = Parallel(
-    #     tasks=[
-    #         Parallel(
-    #             "P1",
-    #             tasks=[
-    #                 Task("P1.S"),
-    #                 Task("P1.A", deps=["P1.S"]),
-    #                 Task("P1.B", deps=["P1.A"]),
-    #                 Task("P1.C", deps=["P1.A"]),
-    #                 Task("P1.D", deps=["P1.B", "P1.C"]),
-    #             ],
-    #         ),
-    #         Parallel(
-    #             "P2",
-    #             deps=["P3"],
-    #             tasks=[
-    #                 Task("P2.S"),
-    #                 Task("P2.A", deps=["P2.S"]),
-    #                 Task("P2.B", deps=["P2.A"]),
-    #                 Task("P2.C", deps=["P2.A"]),
-    #                 Task("P2.D", deps=["P2.B", "P2.C"]),
-    #             ],
-    #         ),
-    #         Parallel(
-    #             "P3",
-    #             tasks=[
-    #                 Task("P3.S"),
-    #                 Task("P3.A", deps=["P3.S"]),
-    #                 Task("P3.B", deps=["P3.A"]),
-    #                 Task("P3.C", deps=["P3.A"]),
-    #                 Task("P3.D", deps=["P3.B", "P3.C"]),
-    #             ],
-    #         ),
-    #     ]
-    # )
+    wf = Workflow([tc])
 
-    # tc = Parallel(
-    #     "P1",
-    #     tasks=[
-    #         Task("S"),
-    #         Task("A", deps=["S"]),
-    #         Task("B", deps=["A"]),
-    #         Task("C", deps=["A"]),
-    #         Task("D", deps=["B", "C"]),
-    #     ],
-    # )
-
-    # print(tc._sorted_task_names)
-    # runwf(tc)
-    # wf = Workflow()
-
-    # asyncio.gather(*wf)
-    asyncio.run(tc.execute(123))
+    asyncio.run(wf.execute("1"))
 
     # 序列化工作流到文件
     # serialize_workflow_to_networkx_format(tasks, "workflow_networkx.json")
