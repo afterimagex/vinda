@@ -3,15 +3,14 @@ import concurrent.futures
 import functools
 import json
 import time
-from abc import ABCMeta
+import uuid
+import weakref
+from abc import ABCMeta, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
-
-import matplotlib.pyplot as plt
-import networkx as nx
-import yaml
-from flowpilot.core.module import UObject
+from enum import Enum
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
+from weakref import ReferenceType
 
 
 class Job:
@@ -38,114 +37,174 @@ class GlobalContext:
     pass
 
 
-@dataclass
-class Input:
-    id: str
-    type: str
+class GraphSchema:
+    pass
+
+
+# G: graph相关基类
+# F: 数据结构，一般用dataclass
+# E: 枚举
+# U: 用户自定义
+
+
+class ENodeStatus(Enum):
+    Initial = 1
+    Running = 2
+    Paused = 3
+    Finished = 4
+    Failed = 5
+    Canceled = 6
+    Unknown = 7
 
 
 @dataclass
-class Output:
-    id: str
-    type: str
+class FPinType:
+    category: str
+    sub_category_object: Optional[ReferenceType]
 
 
 @dataclass
-class NodeModel:
-    # model of mvc
-    # todo: add more fields
-    # todo: metadata
-    # todo: support sqlalchemy
-    id: str
-    type: str
-    inputs: Set[Input] = field(default_factory=set)
-    outputs: Set[Output] = field(default_factory=set)
+class FPin:
+
+    class EDirection(Enum):
+        INPUT = 1
+        OUTPUT = 2
+
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    name: str = ""
+    owning_node: ReferenceType["GNode"] = None
+    direction: EDirection = 1
+    linked_to: weakref.WeakSet["FPin"] = field(default_factory=set)
+    value: Any = None
+    type: FPinType = None
+
+
+class GPin:
+
+    schema = FPin()
+
+    def __init__(self, name: Optional[str] = None) -> None:
+        self.schema.name = name if name else f"{self.__class__.__name__}_{id(self)}"
+        self._links: Set["GPin"] = set()
+
+    def modify(self) -> None:
+        pass
+
+    def linkto(self, other: "FPin") -> None:
+        if other not in self._links:
+            assert self not in other.linked_to
+            # notify owning nodes about upcoming change
+            self.modify()
+            other.modify()
+            self._links.add(other)
+            other.linked_to.add(self)
+
+    def breakto(self, other: "FPin") -> None:
+        if other in self._links:
+            assert self in other.linked_to
+            # notify owning nodes about upcoming change
+            self.modify()
+            other.modify()
+            self._links.remove(other)
+            other.linked_to.remove(self)
+
+
+@dataclass
+class FNode:
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    name: str = ""
+    pins: Set[FPin] = field(default_factory=set)
+    owning_graph: ReferenceType["GGraph"] = None
+    status: ENodeStatus = ENodeStatus.Initial
+    position: Tuple[float, float] = (0.0, 0.0)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    description: str = "A simple tutorial User Interface for Nodes."
+    description: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-class Node(metaclass=ABCMeta):
+class GNode(metaclass=ABCMeta):
+
+    schema = FNode(description="A simple tutorial User Interface for Nodes.")
 
     def __init__(
         self,
-        inputs: Set[Input],
-        outputs: Set[Output],
         name: Optional[str] = None,
-        description: Optional[str] = None,
+        metadata: Optional[dict] = None,
     ):
         self._ctx: dict = None
-        self._name = name if name else f"{self.__class__.__name__}_{id(self)}"
-        self._description = description if description else self._name
-        self._model = NodeModel(
-            self._name,
-            self.__class__.__name__,
-            inputs,
-            outputs,
-            description=self._description,
-        )
+        self.schema.name = name if name else f"{self.__class__.__name__}_{id(self)}"
+        self.schema.metadata.update(metadata if metadata else {})
+        self.pins = self._allocate_default_pins()
+
+    def _allocate_default_pins(self):
+        """在 Node 实例化时自动调用，负责分配一个 Node 中的默认 Pins。"""
+        self.allocate_default_pins()
+        return {pin.name: pin for pin in self.schema.pins}
+
+    @abstractmethod
+    def allocate_default_pins(self):
+        pass
+
+    def _autowire_new_node(self, weak_pin: ReferenceType[FPin]):
+        """用于在创建新 Node 后，自动将其与指定的 Pin 连接。如果需要，应在创建新 Node 后调用。"""
+        pass
+
+    @property
+    def name(self) -> str:
+        return self.schema.name
 
     def build(self, _ctx: dict) -> None:
         self._ctx = _ctx
 
-    @property
-    def name(self) -> str:
-        return self._name
+    # def get_dependencies(self) -> Iterator[FPin]:
+    #     return filter(
+    #         lambda pin: pin.direction == FPin.EDirection.INPUT, self._pins.values()
+    #     )
 
-    def serialize(self) -> dict:
-        return self._model.to_dict()
+    @staticmethod
+    def create_unique_pin_name():
+        pass
 
-    def deserialize(self, metadata: dict) -> None:
-        self._model = NodeModel(**metadata)
-
-    async def execute(self):
+    async def _execute(self):
         assert self._ctx is not None, "Context is not built yet."
-        # print(f"Running {self.name} with input {self.input}", time.time())
-        self._ctx["outputs"][self.name] = f"here is {self.name} output"
-        await asyncio.sleep(1)
-        print(
-            f"Completed {self.name} with output {self._ctx[self.name]}",
-            time.time(),
-        )
+        await self.execute()
 
-class StartOperator(Node):
-    @dataclass
-    class Inputs(Input):
-        begin: bool = True
-
-    @dataclass
-    class Outputs(Output):
-        result: str
-
-    async def execute(self, inputs: str) -> None:
-        assert self._ctx is not None, "Context is not built yet."
-        print("Start Operator", time.time())
-
-class BashOperator(Node):
-
-    @dataclass
-    class Inputs(Input):
-        cmd: str
-        args: List[str]
-
-    @dataclass
-    class Outputs(Output):
-        result: str
-
-    async def execute(self, inputs: "BashOperator.Inputs"):
-        assert self._ctx is not None, "Context is not built yet."
-        ret = f"{inputs.cmd}: {inputs.args}"
-        self._ctx["outputs"][self.name] = BashOperator.Outputs(result=ret)
+    @abstractmethod
+    async def execute(self) -> None:
+        pass
 
 
-class GraphDAG:
-    def __init__(self, nodes: List[Node]) -> None:
+@dataclass
+class FGraph:
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    name: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    connections: List = field(default_factory=list)
+    description: str = ""
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def try_create_connection(self, pa: FPin, pb: FPin) -> None:
+        if self.can_create_connection(pa, pb):
+            pa.linkto(pb)
+
+    def can_create_connection(self, pa: FPin, pb: FPin) -> bool:
+        return True
+
+
+class GGraph:
+
+    schema = FGraph(description="A simple tutorial User Interface for Graphs.")
+
+    def __init__(self, nodes: List[GNode]) -> None:
         self._nodes = {node.name: node for node in nodes}
         assert self._inputs_binding_check()
         self._sorted_node_names, self._reverse_dependencies = self._topological_sort()
         self._graph_ctx = {"outputs": {}}
+        self._schema = GraphSchema()
 
     def build(self) -> None:
         for node in self._nodes.values():
@@ -172,7 +231,10 @@ class GraphDAG:
         # todo: 抽取，并满足单一职能原则
         sorted_nodes = []
         in_degree = {
-            name: len(node._model.inputs) for name, node in self._nodes.items()
+            name: len(
+                node.get_pins(lambda _, pin: pin.direction == FPin.EDirection.INPUT)
+            )
+            for name, node in self._nodes.items()
         }
         reverse_dependencies = defaultdict(list)
 
@@ -198,15 +260,72 @@ class GraphDAG:
 
         return sorted_nodes, reverse_dependencies
 
-    def add_node(self, node: Node) -> None:
+    def add_node(self, node: GNode) -> None:
         if node.name in self._nodes:
             raise ValueError(f"Node {node.name} already exists.")
         self._nodes[node.name] = node
         self._sorted_task_names, self._reverse_dependencies = self._topological_sort()
 
 
+class StartOperator(GNode):
+
+    def allocate_default_pins(self):
+        self.schema.pins.add(
+            FPin(
+                name="output",
+                owning_node=weakref.ref(self),
+                direction=FPin.EDirection.OUTPUT,
+            )
+        )
+
+    async def execute(self) -> None:
+        self.pins["output"].value = "Start Operator output"
+        print("Start Operator", time.time())
+
+
+class BashOperator(GNode):
+
+    def allocate_default_pins(self):
+        self.schema.pins.add(
+            FPin(
+                name="command",
+                owning_node=weakref.ref(self),
+                direction=FPin.EDirection.INPUT,
+            )
+        )
+        self.schema.pins.add(
+            FPin(
+                name="output",
+                owning_node=weakref.ref(self),
+                direction=FPin.EDirection.OUTPUT,
+            )
+        )
+
+    async def execute(self):
+        command = self.pins["command"].value
+        print(f"BashOperator: {command}")
+        self.pins["output"]().value = command
+
+
+class PythonOperator(GNode):
+
+    def allocate_default_pins(self):
+        pass
+
+    def execute(self):
+        assert self._ctx is not None, "Context is not built yet."
+
+        args = {}
+        for input in self._model.inputs:
+            args.append(self._ctx["outputs"][input])
+
+        input_op = self._ctx["inputs"][self._model.inputs]
+        arg1, arg2 = self._ctx["outputs"][self.name]
+        self._ctx["outputs"][self.name] = f"Hello World from {self.name}"
+
+
 class GraphExecutor:
-    def __init__(self, graph: GraphDAG, parallel: bool = True):
+    def __init__(self, graph: GGraph, parallel: bool = True):
         self._graph = graph
         self._parallel = parallel
 
@@ -259,53 +378,44 @@ class GraphExecutor:
             await self._sequential_execute()
 
 
-class PythonOperator(Node):
-    metastruct = {
-        "inputs": ["code", "date"],
-        "outputs": ["output"],
-    }
-
-    def execute(self):
-        assert self._ctx is not None, "Context is not built yet."
-
-        args = {}
-        for input in self._model.inputs:
-            args.append(self._ctx["outputs"][input])
-
-        input_op = self._ctx["inputs"][self._model.inputs]
-        arg1, arg2 = self._ctx["outputs"][self.name]
-        self._ctx["outputs"][self.name] = f"Hello World from {self.name}"
-
-
 if __name__ == "__main__":
 
-    inputs = {Input(id="cmd", type="string"), Input(id="args", type="list")}
-    outputs = {Output(id="result", type="string")}
-    bash_operator = BashOperator(inputs=set([
+    # with GGraph() as graph:
+    #     start_op = StartOperator(name="start")
+    #     bash_operator = BashOperator(name="bash")
+    #     start_op.pins["output"].linkto(bash_operator.pins["command"])
 
-    ]), outputs)
-    context = {"outputs": {}}
-    bash_operator.build(context)
-    asyncio.run(
-        bash_operator.execute(BashOperator.Inputs(cmd="echo", args=["Hello, World!"]))
-    )
+    start_op = StartOperator(name="start")
+    bash_operator = BashOperator(name="bash")
+    start_op.pins["output"].linkto(bash_operator.pins["cmd"])
 
-    graph = GraphDAG(
-        [
-            PythonOperator({}, name="P1.S"),
-            BashOperator({Binding("P1.S", "PythonOperator")}, name="P1.A"),
-            PythonOperator({Binding("P1.S", "PythonOperator")}, name="P1.B"),
-            BashOperator({Binding("P1.S", "PythonOperator")}, name="P1.C"),
-            PythonOperator(
-                {Binding("P1.B", "PythonOperator"), Binding("P1.C", "BashOperator")},
-                name="P1.D",
-            ),
-        ]
-    )
-    graph.serialize_to_json("dag.json")
-    graph = GraphDAG.from_json("dag.json")
-    exe = GraphExecutor(graph)
-    exe.execute()
+    # inputs = {Input(id="cmd", type="string"), Input(id="args", type="list")}
+    # outputs = {Output(id="result", type="string")}
+    # bash_operator = BashOperator(inputs=set([
+
+    # ]), outputs)
+    # context = {"outputs": {}}
+    # bash_operator.build(context)
+    # asyncio.run(
+    #     bash_operator.execute(BashOperator.Inputs(cmd="echo", args=["Hello, World!"]))
+    # )
+
+    # graph = GraphDAG(
+    #     [
+    #         PythonOperator({}, name="P1.S"),
+    #         BashOperator({Binding("P1.S", "PythonOperator")}, name="P1.A"),
+    #         PythonOperator({Binding("P1.S", "PythonOperator")}, name="P1.B"),
+    #         BashOperator({Binding("P1.S", "PythonOperator")}, name="P1.C"),
+    #         PythonOperator(
+    #             {Binding("P1.B", "PythonOperator"), Binding("P1.C", "BashOperator")},
+    #             name="P1.D",
+    #         ),
+    #     ]
+    # )
+    # graph.serialize_to_json("dag.json")
+    # graph = GraphDAG.from_json("dag.json")
+    # exe = GraphExecutor(graph)
+    # exe.execute()
 
     # with GraphDAG() as graph:
     #     op_01 = BashOperator(name="op_01")
