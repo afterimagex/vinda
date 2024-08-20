@@ -74,9 +74,12 @@ class FPin:
     name: str = ""
     owning_node: ReferenceType["GNode"] = None
     direction: EDirection = 1
-    linked_to: weakref.WeakSet["FPin"] = field(default_factory=set)
+    # linked_to: weakref.WeakSet["FPin"] = field(default_factory=set)
     value: Any = None
     type: FPinType = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 class GPin:
@@ -84,29 +87,29 @@ class GPin:
     schema = FPin()
 
     def __init__(self, name: Optional[str] = None) -> None:
+        self.links: Set["GPin"] = set()
         self.schema.name = name if name else f"{self.__class__.__name__}_{id(self)}"
-        self._links: Set["GPin"] = set()
 
     def modify(self) -> None:
         pass
 
-    def linkto(self, other: "FPin") -> None:
+    def linkto(self, other: "GPin") -> None:
         if other not in self._links:
             assert self not in other.linked_to
             # notify owning nodes about upcoming change
             self.modify()
             other.modify()
-            self._links.add(other)
-            other.linked_to.add(self)
+            self.links.add(other)
+            other.links.add(self)
 
-    def breakto(self, other: "FPin") -> None:
+    def breakto(self, other: "GPin") -> None:
         if other in self._links:
             assert self in other.linked_to
             # notify owning nodes about upcoming change
             self.modify()
             other.modify()
-            self._links.remove(other)
-            other.linked_to.remove(self)
+            self.links.remove(other)
+            other.links.remove(self)
 
 
 @dataclass
@@ -187,13 +190,6 @@ class FGraph:
     def to_dict(self) -> dict:
         return asdict(self)
 
-    def try_create_connection(self, pa: FPin, pb: FPin) -> None:
-        if self.can_create_connection(pa, pb):
-            pa.linkto(pb)
-
-    def can_create_connection(self, pa: FPin, pb: FPin) -> bool:
-        return True
-
 
 class GGraph:
 
@@ -209,6 +205,13 @@ class GGraph:
     def build(self) -> None:
         for node in self._nodes.values():
             node.build(self._graph_ctx)
+
+    def try_create_connection(self, apin: GPin, bpin: GPin) -> None:
+        if self.can_create_connection(apin, bpin):
+            apin.linkto(bpin)
+
+    def can_create_connection(self, apin: GPin, bpin: GPin) -> bool:
+        return True
 
     def _inputs_binding_check(self) -> bool:
         # for node in self._nodes.values():
