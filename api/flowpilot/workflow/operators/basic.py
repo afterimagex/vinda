@@ -2,13 +2,13 @@ import asyncio
 
 from flowpilot.workflow.node import GNode
 from flowpilot.workflow.operators.factory import OPERATOR_REGISTRY
-from flowpilot.workflow.pin import EDirection, FPin
+from flowpilot.workflow.pin import EDirection, FPin, FPinType
 
 
 @OPERATOR_REGISTRY.register()
 class StartOperator(GNode):
 
-    def _create_default_pins(self):
+    def _input_bindings(self):
         pass
 
     async def execute(self) -> None:
@@ -19,7 +19,7 @@ class StartOperator(GNode):
 
 @OPERATOR_REGISTRY.register()
 class EndOperator(GNode):
-    def _create_default_pins(self):
+    def _input_bindings(self):
         self.add_pin(
             FPin(
                 name="merge",
@@ -36,7 +36,7 @@ class EndOperator(GNode):
 @OPERATOR_REGISTRY.register()
 class PythonOperator(GNode):
 
-    def _create_default_pins(self):
+    def _input_bindings(self):
         self.add_pin(
             FPin(
                 name="arg1",
@@ -61,7 +61,7 @@ class PythonOperator(GNode):
 @OPERATOR_REGISTRY.register()
 class BashOperator(GNode):
 
-    def _create_default_pins(self):
+    def _input_bindings(self):
         self.add_pin(
             FPin(
                 name="arg1",
@@ -74,3 +74,12 @@ class BashOperator(GNode):
         self.pins["output"].value = self.name
         await asyncio.sleep(1)
         print(f'{self.name}: Input({arg1}), Output({self.pins["output"].value})')
+
+
+@OPERATOR_REGISTRY.register()
+class HttpOperator(GNode):
+
+    def _input_bindings(self) -> None:
+        self.add_pin(
+            FPin(name="arg1", direction=EDirection.INPUT, type=FPinType("dict"))
+        )

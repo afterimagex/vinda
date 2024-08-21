@@ -1,0 +1,2 @@
+class USubsystem:
+    pass

@@ -14,7 +14,7 @@ Registered object must return instance of :class:`GNode`.
 """
 
 
-def build_operator(operator_class, name) -> GNode:
+def new_operator(operator_class, name) -> GNode:
     """
     Build a operator from `operator_class`.
 

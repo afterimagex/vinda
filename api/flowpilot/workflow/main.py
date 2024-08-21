@@ -4,15 +4,15 @@ import weakref
 
 from flowpilot.workflow.executor import GraphExecutor
 from flowpilot.workflow.graph import GGraph
-from flowpilot.workflow.operators import OPERATOR_REGISTRY, build_operator
+from flowpilot.workflow.operators import OPERATOR_REGISTRY, new_operator
 
 if __name__ == "__main__":
     print(OPERATOR_REGISTRY)
-    n1 = build_operator("StartOperator", "start")
-    n2 = build_operator("BashOperator", "bash")
-    n3 = build_operator("PythonOperator", "python1")
-    n4 = build_operator("PythonOperator", "python2")
-    n5 = build_operator("EndOperator", "end")
+    n1 = new_operator("StartOperator", "start")
+    n2 = new_operator("BashOperator", "bash")
+    n3 = new_operator("PythonOperator", "python1")
+    n4 = new_operator("PythonOperator", "python2")
+    n5 = new_operator("EndOperator", "end")
 
     n1.pins["output"].link_to(n2.pins["arg1"])
 

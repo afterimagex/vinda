@@ -37,6 +37,7 @@ class GraphExecutor:
             await asyncio.gather(*[task_coroutines[name] for name in runnable_tasks])
 
             # 更新已完成的任务列表
+            # todo: 节点执行失败，停止流程
             for name in runnable_tasks:
                 sorted_node_names.remove(name)
                 completed_tasks.add(name)

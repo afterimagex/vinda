@@ -68,10 +68,10 @@ class GNode(metaclass=ABCMeta):
     def __allocate_default_pins(self) -> None:
         """Allocate default pins when the node is instantiated."""
         self.add_pin(FPin("output", direction=EDirection.OUTPUT))
-        self._create_default_pins()
+        self._input_bindings()
 
     @abstractmethod
-    def _create_default_pins(self) -> None:
+    def _input_bindings(self) -> None:
         pass
 
     # def _autowire_new_node(self, weak_pin: ReferenceType["FPin"]):
