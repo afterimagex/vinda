@@ -55,7 +55,6 @@ class GNode(metaclass=ABCMeta):
     def __init__(
         self,
         name: str,
-        metadata: Optional[dict] = None,
     ):
         self._ctx: dict = None
         self._name = name
@@ -63,7 +62,6 @@ class GNode(metaclass=ABCMeta):
         self._schema = FNodeSchema(
             name=f"{name}.schema",
             description="A simple tutorial User Interface for Nodes.",
-            metadata=metadata if metadata else {},
         )
         self.__allocate_default_pins()
 

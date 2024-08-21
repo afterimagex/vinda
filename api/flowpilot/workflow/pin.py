@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 @dataclass
 class FPinType:
     category: str
-    sub_category_object: Optional[ReferenceType]
+    sub_category_object: Optional[ReferenceType] = None
 
 
 class EDirection(Enum):
@@ -27,12 +27,24 @@ class FPin:
     owning_node: Optional[ReferenceType] = None
     direction: EDirection = EDirection.INPUT
     value: Any = None
-    type: FPinType = None
+    type: FPinType = FPinType("default")
     links: Set["FPin"] = field(default_factory=set)
     _id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        data["direction"] = self.direction.value
+        data["links"] = []
+        data["owning_node"] = None
+        data["_id"] = str(self._id)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FPin":
+        data["_id"] = uuid.UUID(data["_id"])
+        data["direction"] = EDirection(data["direction"])
+        data["links"] = set()
+        return cls(**data)
 
     def modify(self) -> None:
         pass
@@ -55,9 +67,6 @@ class FPin:
             self.links.remove(other)
             other.links.remove(self)
 
-    def to_dict(self) -> dict:
-        return asdict(self)
-
     def __hash__(self) -> int:
         return hash(self._id)
 
@@ -71,4 +80,12 @@ if __name__ == "__main__":
     p1 = FPin("123")
     p2 = FPin("123")
     ss = {p1, p2}
-    print(ss)
+    # print(ss)
+
+    import json
+
+    spec = json.dumps(p1.to_dict())
+    print(spec)
+
+    new_p = FPin.from_dict(json.loads(spec))
+    print(new_p)
