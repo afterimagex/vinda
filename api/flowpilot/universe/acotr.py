@@ -6,10 +6,10 @@ from abc import ABC
 from collections import OrderedDict, defaultdict, deque
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
-from flowpilot.universe.engine import FWorldContext, ITickable, UObject
+from flowpilot.universe import FTickableObject, FWorldContext, UActorComponent, UObject
 
 
-class AActor(UObject, ITickable):
+class AActor(FTickableObject):
     """
     AActor 是 Unreal Engine 中具备 BeginPlay 和 Tick 等功能的最基础类。
     AActor 提供了丰富的生命周期管理功能，包括 BeginPlay、Tick、EndPlay 等。
@@ -22,19 +22,19 @@ class AActor(UObject, ITickable):
     ):
         super().__init__(name)
         self._ctx = world_context
-        self._components = []
+        self._components: List["UActorComponent"] = []
 
     @property
     def name(self) -> str:
         return self._name
 
-    def attach(self, context: "UContext") -> "UObject":
-        self._ctx = context
+    def attach(self, world_context: FWorldContext) -> "UObject":
+        self._ctx = world_context
         return self
 
     def tick(self, delta_time: float):
-        for component in self._components:
-            component.tick(delta_time)
+        for comp in self._components:
+            comp.tick(delta_time)
 
     def setup(self):
         pass

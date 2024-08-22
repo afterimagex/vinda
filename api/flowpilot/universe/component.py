@@ -1,6 +1,6 @@
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
-from flowpilot.universe.acotr import UObject
+from flowpilot.universe import FTickableObject, UObject
 
 
 class UComponent(UObject):
@@ -12,7 +12,7 @@ class UComponent(UObject):
         return f"UComponent(name={self._name})"
 
 
-class UActorComponent(UComponent):
+class UActorComponent(FTickableObject):
     """
     UActorComponent 是可以附加到 AActor 的组件类。
     UActorComponent 具备 BeginPlay 和 TickComponent 功能，但需要设置 PrimaryComponentTick.bCanEverTick = true; 来启用 Tick。
