@@ -62,3 +62,12 @@ unreal 中UEngine UObject UGameInstance UWorld都是怎么一个关系
 * 跨模块引用：当对象分布在不同的模块中时，需要确保这些模块之间的依赖关系是清晰和可控的。这通常涉及到模块间的接口定义和依赖注入等策略。
 
 综上所述，Unreal Engine中的基类通过继承、组合、接口与回调等方式相互引用和管理，共同构成了引擎丰富的架构体系。在设计游戏时，开发者需要根据具体的游戏需求和场景选择合适的基类和架构方式。
+
+
+
+AI 控制器（AI Controllers）
+行为树（Behavior Trees）
+任务图系统（Task Graph System）
+动画蓝图（Animation Blueprints）
+时间轴（Timelines）
+自定义逻辑（Custom Logic）

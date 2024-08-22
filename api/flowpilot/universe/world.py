@@ -2,7 +2,7 @@ import weakref
 from dataclasses import dataclass
 from typing import List, Optional
 
-from flowpilot.universe import UObject, USimInstance, UWorld
+from flowpilot.universe import IEventableMixin, UEpisode, UObject, USimInstance
 
 
 @dataclass
@@ -15,7 +15,7 @@ class FWorldContext:
     world: weakref.ReferenceType["UWorld"] = None
 
 
-class UWorld(UObject):
+class UWorld(UObject, IEventableMixin):
     """
     UWrold
     UWorld 是游戏世界的类，它包含了游戏中的所有实体（如Actor、Component等）。
@@ -24,14 +24,19 @@ class UWorld(UObject):
     在Unreal Engine中，游戏世界是动态的，可以包含各种交互元素和逻辑。
     """
 
+    is_tickable = True
+
     def __init__(
         self,
         name: Optional[str] = None,
-        *,
-        sim_instance: USimInstance,
     ) -> None:
         super().__init__(name)
-        self._sim_instance = sim_instance
+        self._ctx: FWorldContext = None
+        self._coordinator = None
+        self._episode: UEpisode = None
+
+    def init(self) -> None:
+        pass
 
     def attach(
         self,
@@ -41,6 +46,11 @@ class UWorld(UObject):
         self._ctx = world_context
         self._ctx.world = weakref.ref(self)
 
-    def tick(self, delta_time: float):
+    def setup(self):
+        pass
+
+    async def tick(self, delta_time: float):
         """tick"""
-        return super().tick()
+
+    def get_sim_instance(self) -> USimInstance:
+        return self._ctx.sim_instance()

@@ -11,4 +11,4 @@ class UEpisode(UObject):
 
     def tick(self, delta_time: float):
         """tick"""
-        return super().tick()
+        pass

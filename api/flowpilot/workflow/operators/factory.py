@@ -1,5 +1,9 @@
+from typing import Any, Optional, TypeVar
+
 from flowpilot.common.registry import Registry
 from flowpilot.workflow.node import GNode
+
+T = TypeVar("T", bound="GNode")
 
 OPERATOR_REGISTRY = Registry("OPERATOR")
 OPERATOR_REGISTRY.__doc__ = """
@@ -14,7 +18,7 @@ Registered object must return instance of :class:`GNode`.
 """
 
 
-def new_operator(operator_class, name) -> GNode:
+def new_operator(operator_class: str, name: Optional[str] = None, *args, **kwargs) -> T:
     """
     Build a operator from `operator_class`.
 
@@ -22,6 +26,6 @@ def new_operator(operator_class, name) -> GNode:
         an instance of :class:`GNode`
     """
 
-    operator = OPERATOR_REGISTRY.get(operator_class)(name)
-    assert isinstance(operator, GNode)
+    operator = OPERATOR_REGISTRY.get(operator_class)(name, *args, **kwargs)
+    assert isinstance(operator, T)
     return operator

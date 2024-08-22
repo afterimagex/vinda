@@ -9,7 +9,15 @@ from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
-from flowpilot.universe import FWorldContext, UObject, UTimer, UWorld
+from flowpilot.universe import (
+    FWorldContext,
+    ITickableObject,
+    UObject,
+    USimInstance,
+    UTimer,
+    UWorld,
+    new_uclass,
+)
 
 
 class UEngine:
@@ -28,71 +36,85 @@ class UEngine:
         self._tick_event = threading.Event()
         self._timer = UTimer(self._tick_event, interval=timer_interval)
         self._worlds: List[UWorld] = []
+        self._context: FWorldContext = None
+        self._sim_instance: USimInstance = None
 
     def _preinit(self) -> None:
         """"""
         pass
 
     def _init(self) -> None:
-        pass
+        if self._sim_instance is None:
+            self._sim_instance = new_uclass("USimInstance", "DefaultSimInstance")
+            self._sim_instance.init()
+        self._load_world()
+        for world in self._worlds:
+            world.init()
 
     def _create_default_object(self) -> None:
         """"""
-        self._sim_instance = USimInstance()
+        self._context = FWorldContext()
 
-        context = FWorldContext()
-        self._sim_instance.attach(context)
-
-        self._worlds.append(UWorld("DefaultWorld", self._sim_instance))
-        self._worlds[0].attach(context)
-
-    def tick(self, delta_time: float) -> None:
+    def _load_world(self) -> None:
         """"""
-        self._sim_instance.tick(delta_time)
+        self._worlds.append(new_uclass("UWorld", "DefaultWorld"))
 
-    def loop(self) -> None:
+    def _postinit(self) -> None:
+        self._sim_instance.attach(self._context)
+        for world in self._worlds:
+            world.attach(self._context)
+            world.setup()
+
+    async def tick(self, delta_time: float) -> None:
         """"""
+        await self._sim_instance.tick(delta_time)
+
+        await asyncio.gather(
+            *[
+                world.has_begun_play()
+                for world in self._worlds
+                if not world.has_begun_play()
+            ]
+        )
+
+        await asyncio.gather(*[world.on_begin_tick() for world in self._worlds])
+        await asyncio.gather(*[world.tick() for world in self._worlds])
+        await asyncio.gather(*[world.on_end_tick() for world in self._worlds])
+
+    async def loop(self) -> None:
+        """loop"""
         self._preinit()
         self._init()
         self._create_default_object()
+        self._postinit()
+
         self._is_running = True
         self._timer.start()
+
         try:
             while self._is_running:
                 self._tick_event.wait()  # Wait for the timer thread to notify
                 self._tick_event.clear()
-                self.tick(
+                await self.tick(
                     self._timer.delta_time
                 )  # Assume fixed time step (e.g., 60 FPS)
+
+            await asyncio.gather(*[world.on_after_play() for world in self._worlds])
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            traceback.print_exception(e)
+
         finally:
-            self.stop()
+            self._exit()
+
+    def _exit(self):
+        self._sim_instance.shutdown()
 
     def stop(self):
         self._is_running = False
         self._timer.stop()
 
-
-class USimInstance(UObject):
-    """
-    USimInstance
-    UGameInstance 是游戏实例的类，它代表了游戏的一个特定实例。
-    每个游戏实例都可以有自己的配置、数据等，这些在游戏的多个关卡或会话之间保持不变。
-    UGameInstance 允许开发者在游戏的不同部分之间共享数据，而不需要将这些数据存储在全局变量中。
-    此外，UGameInstance 还提供了在游戏开始时和结束时执行代码的机会，以及处理游戏会话的保存和加载。
-    """
-
-    def __init__(self) -> None:
-        """"""
-        super().__init__("SimInstance")
-
-    def attach(
-        self,
-        world_context: FWorldContext,
-    ) -> None:
-        """"""
-        self._ctx = world_context
-        self._ctx.sim_instance = weakref.ref(self)
-
-    def tick(self, delta_time: float) -> None:
-        """"""
-        pass
+    def run_thread(self):
+        thread = threading.Thread(target=lambda: asyncio.run(self.loop()))
+        thread.start()
+        thread.join()

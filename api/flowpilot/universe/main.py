@@ -1,2 +1,5 @@
+from flowpilot.universe import UEngine
+
 if __name__ == "__main__":
-    pass
+    engine = UEngine()
+    engine.loop()

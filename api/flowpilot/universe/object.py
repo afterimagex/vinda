@@ -1,3 +1,4 @@
+import asyncio
 import weakref
 from abc import ABC
 from collections import OrderedDict
@@ -17,6 +18,9 @@ class UObject(ABC):
     以便在程序重启时恢复。
     """
 
+    category: Optional[str] = None
+    is_tickable: bool = False
+
     def __init__(self, name: Optional[str] = None) -> None:
         self._name = name if name else f"{self.__class__.__name__}_{id(self)}"
         self._children: OrderedDict[str, weakref.ReferenceType[T]] = OrderedDict()
@@ -24,9 +28,6 @@ class UObject(ABC):
     @property
     def name(self) -> str:
         return self._name
-
-    def is_tickable(self) -> bool:
-        return False
 
     def add_child(self, child: T) -> None:
         """添加一个子对象到当前对象。
@@ -95,13 +96,55 @@ class UObject(ABC):
         return current
 
 
-class FTickableObject(UObject):
+class IEventableMixin(ABC):
+    """IEventableObject"""
 
-    def tick(self, delta_time: float) -> None:
+    is_tickable: bool = True
+    has_begun_play: bool = False
+
+    async def _gather_children_method(self: T, method_name: str):
+        """Helper to gather async calls to children methods"""
+        await asyncio.gather(
+            *[
+                getattr(child, method_name, self._default_noop)()
+                for _, child in self.named_children()
+            ]
+        )
+
+    async def _default_noop(self):
+        """Default no-op async method"""
         pass
 
-    def is_tickable(self) -> bool:
-        return True
+    async def on_setup(self):
+        """on_setup"""
+        await self._gather_children_method("on_setup")
+
+    async def on_begin_play(self):
+        """on_begin_play"""
+        self.has_begun_play = True
+        await self._gather_children_method("on_begin_play")
+
+    async def on_after_play(self):
+        """on_after_play"""
+        self.has_begun_play = False
+        await self._gather_children_method("on_after_play")
+
+    async def on_begin_tick(self):
+        await self._gather_children_method("on_begin_tick")
+
+    async def tick(self):
+        await self._gather_children_method("tick")
+
+    async def on_after_tick(self):
+        await self._gather_children_method("on_after_tick")
+
+    async def on_destroy(self):
+        """标记待销毁"""
+        await self._gather_children_method("on_destroy")
+
+    async def on_finally_destroy(self):
+        """销毁前最后一个回调"""
+        await self._gather_children_method("on_finally_destroy")
 
 
 class Test(UObject):
