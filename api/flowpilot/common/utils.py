@@ -42,6 +42,17 @@ class AsyncThreadSafeSingleton(type):
             def __init__(self):
                 pass
 
+            async def async_method(self):
+                async with self._async_lock:
+                    # Perform async operations safely
+                    await asyncio.sleep(1)
+                    print("Async method executed")
+
+            def sync_method(self):
+                with self._thread_lock:
+                    # Perform sync operations safely
+                    print("Sync method executed")
+
     To use the singleton instance in a multithreaded environment:
 
     .. code-block:: python
