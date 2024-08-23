@@ -27,12 +27,13 @@ if TYPE_CHECKING:
 
 class ENodeStatus(Enum):
     Initial = 1
-    Running = 2
-    Paused = 3
-    Finished = 4
-    Failed = 5
-    Canceled = 6
-    Unknown = 7
+    Pending = 2
+    Running = 3
+    Paused = 4
+    Finished = 5
+    Failed = 6
+    Canceled = 7
+    Unknown = 8
 
 
 @dataclass
@@ -48,6 +49,10 @@ class FNodeSchema:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+class StateMachine:
+    pass
 
 
 class GNode(metaclass=ABCMeta):
@@ -86,8 +91,15 @@ class GNode(metaclass=ABCMeta):
     def pins(self) -> Dict[str, FPin]:
         return self._pins
 
-    def build(self, _ctx: dict) -> None:
-        self._ctx = _ctx
+    def build(self, ctx: dict) -> None:
+        """依赖检查"""
+        self._ctx = ctx
+
+    def setup(self):
+        """初始化赋值"""
+
+    def reset(self):
+        self._schema.status = ENodeStatus.Pending
 
     @functools.lru_cache()
     def get_dependencies(self) -> Set[ReferenceType["GNode"]]:
@@ -108,13 +120,22 @@ class GNode(metaclass=ABCMeta):
 
     async def _execute(self):
         assert self._ctx is not None, "Context is not built yet."
+
+        # if self._schema.status == ENodeStatus.Pending:
         await self.execute()
-        for pin in self.pins.values():
-            if pin.direction == EDirection.OUTPUT:
+
+        if self._schema.status == ENodeStatus.Finished:
+            for pin in self.pins.values():
+                if pin.direction != EDirection.OUTPUT:
+                    continue
                 for link_pin in pin.links:
-                    if link_pin.direction == EDirection.INPUT:
-                        link_pin.value = pin.value
+                    if link_pin.direction != EDirection.INPUT:
+                        continue
+                    link_pin.value = pin.value
 
     @abstractmethod
     async def execute(self) -> None:
         pass
+
+    def serialize(self):
+        return self._schema.to_dict()

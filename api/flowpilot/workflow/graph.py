@@ -43,6 +43,10 @@ class GGraph:
             node.build(self._ctx)
         self._validate_input_bindings()
 
+    def reset(self) -> None:
+        for node in self._nodes.values():
+            node.reset()
+
     @classmethod
     def build_from_graph_spec(self, spec: GraphSpec) -> None:
         pass
@@ -64,7 +68,7 @@ class GGraph:
         pass
 
     def serialize(self) -> dict:
-        pass
+        return {node.name: node.serialize() for node in self._nodes.values()}
 
     def deserialize(self, data: dict) -> None:
         pass

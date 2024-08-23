@@ -29,19 +29,19 @@ class FPin:
     value: Any = None
     type: FPinType = FPinType("default")
     links: Set["FPin"] = field(default_factory=set)
-    _id: uuid.UUID = field(default_factory=uuid.uuid4)
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     def to_dict(self) -> dict:
         data = asdict(self)
         data["direction"] = self.direction.value
         data["links"] = []
         data["owning_node"] = None
-        data["_id"] = str(self._id)
+        # data["id"] = str(self.id)
         return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "FPin":
-        data["_id"] = uuid.UUID(data["_id"])
+        # data["id"] = uuid.UUID(data["id"])
         data["direction"] = EDirection(data["direction"])
         data["links"] = set()
         return cls(**data)
@@ -68,12 +68,12 @@ class FPin:
             other.links.remove(self)
 
     def __hash__(self) -> int:
-        return hash(self._id)
+        return hash(self.name)
 
     def __eq__(self, other):
         if not isinstance(other, FPin):
             return False
-        return self._id == other._id
+        return self.name == other.name
 
 
 if __name__ == "__main__":

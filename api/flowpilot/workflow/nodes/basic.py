@@ -1,23 +1,23 @@
 import asyncio
 
 from flowpilot.workflow.node import GNode
-from flowpilot.workflow.operators.factory import OPERATOR_REGISTRY
+from flowpilot.workflow.nodes.factory import UNODE
 from flowpilot.workflow.pin import EDirection, FPin, FPinType
 
 
-@OPERATOR_REGISTRY.register()
+@UNODE()
 class StartOperator(GNode):
 
     def _input_bindings(self):
         pass
 
     async def execute(self) -> None:
-        self.pins["output"].value = self.name
-        await asyncio.sleep(1)
-        print(f'{self.name}: Input(None), Output({self.pins["output"].value})')
+        inp = input("Please enter something: ")
+        self.pins["output"].value = inp
+        print(f'{self.name}: Input({inp}), Output({self.pins["output"].value})')
 
 
-@OPERATOR_REGISTRY.register()
+@UNODE()
 class EndOperator(GNode):
     def _input_bindings(self):
         self.add_pin(
@@ -33,7 +33,7 @@ class EndOperator(GNode):
         print(f'{self.name}: Input({arg1}), Output({self.pins["output"].value})')
 
 
-@OPERATOR_REGISTRY.register()
+@UNODE()
 class PythonOperator(GNode):
 
     def _input_bindings(self):
@@ -58,7 +58,7 @@ class PythonOperator(GNode):
         print(f'{self.name}: Input({arg1},{arg2}), Output({self.pins["output"].value})')
 
 
-@OPERATOR_REGISTRY.register()
+@UNODE()
 class BashOperator(GNode):
 
     def _input_bindings(self):
@@ -74,12 +74,3 @@ class BashOperator(GNode):
         self.pins["output"].value = self.name
         await asyncio.sleep(1)
         print(f'{self.name}: Input({arg1}), Output({self.pins["output"].value})')
-
-
-@OPERATOR_REGISTRY.register()
-class HttpOperator(GNode):
-
-    def _input_bindings(self) -> None:
-        self.add_pin(
-            FPin(name="arg1", direction=EDirection.INPUT, type=FPinType("dict"))
-        )
