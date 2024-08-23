@@ -14,6 +14,7 @@ Registry for UCLASS
 
 def UCLASS(category: Optional[str] = None):
 
+    @functools.wraps()
     def deco(uclass: T) -> T:
         assert isinstance(uclass, T)
         UCLASS_REGISTRY.register(uclass)

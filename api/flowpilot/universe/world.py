@@ -15,6 +15,10 @@ class FWorldContext:
     world: weakref.ReferenceType["UWorld"] = None
 
 
+class UScene(UObject):
+    """UScene"""
+
+
 class UWorld(UObject, IEventableMixin):
     """
     UWrold
