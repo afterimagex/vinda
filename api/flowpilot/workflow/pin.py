@@ -4,6 +4,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Set
 from weakref import ReferenceType
 
+from pydantic import BaseModel
+
 if TYPE_CHECKING:
     from weakref import ReferenceType
 
@@ -21,8 +23,7 @@ class EDirection(Enum):
     OUTPUT = 2
 
 
-@dataclass
-class FPin:
+class FPin(BaseModel):
     name: str = ""
     owning_node: Optional[ReferenceType] = None
     direction: EDirection = EDirection.INPUT
