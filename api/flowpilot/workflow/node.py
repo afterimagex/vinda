@@ -92,16 +92,16 @@ class GNode(metaclass=ABCMeta):
     def name(self) -> str:
         return self._name
 
-    def __setattr__(self, __name: str, __value: Any) -> None:
-        # super().__setattr__("_schema", OrderedDict())
-        super().__setattr__("state", OrderedDict())
-        super().__setattr__("_forward_hooks", OrderedDict())
-        super().__setattr__("_forward_hooks_with_kwargs", OrderedDict())
+    # def __setattr__(self, __name: str, __value: Any) -> None:
+    #     # super().__setattr__("_schema", OrderedDict())
+    #     super().__setattr__("state", OrderedDict())
+    #     super().__setattr__("_forward_hooks", OrderedDict())
+    #     super().__setattr__("_forward_hooks_with_kwargs", OrderedDict())
 
-        if isinstance(__value, GNode):
-            nodes = self.__dict__.get("_nodes")
-            if nodes is None:
-                nodes = self.__dict__["_nodes"] = OrderedDict()
+    #     if isinstance(__value, GNode):
+    #         nodes = self.__dict__.get("_nodes")
+    #         if nodes is None:
+    #             nodes = self.__dict__["_nodes"] = OrderedDict()
 
     @property
     def pins(self) -> Dict[str, FPin]:
