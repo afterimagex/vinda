@@ -77,9 +77,9 @@ class UEngine:
             ]
         )
 
-        await asyncio.gather(*[world.on_begin_tick() for world in self._worlds])
+        await asyncio.gather(*[world.begin_tick() for world in self._worlds])
         await asyncio.gather(*[world.tick() for world in self._worlds])
-        await asyncio.gather(*[world.on_end_tick() for world in self._worlds])
+        await asyncio.gather(*[world.after_tick() for world in self._worlds])
 
     async def loop(self) -> None:
         """loop"""
@@ -99,7 +99,7 @@ class UEngine:
                     self._timer.delta_time
                 )  # Assume fixed time step (e.g., 60 FPS)
 
-            await asyncio.gather(*[world.on_after_play() for world in self._worlds])
+            await asyncio.gather(*[world.after_play() for world in self._worlds])
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             traceback.print_exception(e)

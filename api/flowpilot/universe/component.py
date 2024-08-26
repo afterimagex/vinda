@@ -2,6 +2,22 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Un
 
 from flowpilot.universe import IEventableMixin, UObject
 
+# class UComponentMeta(type):
+
+#     def __new__(
+#         cls, name: str, bases: Tuple[type], attrs: Dict[str, Any]
+#     ) -> "UComponent":
+#         if not hasattr(cls, "_components"):
+#             # This is the first time UComponentMeta.__new__ has been called for this class.
+#             # We need to create a new _components dict and register it on all subclasses of UComponent.
+#             cls._components = {}
+#         else:
+#             pass
+#             # UComponentMeta.__new__ has already been called for this class.
+#         if UObject not in bases:
+#             raise TypeError(f"{name} must inherit from UObject")
+#         return super().__new__(cls, name, bases, attrs)
+
 
 class UComponent(UObject):
 
