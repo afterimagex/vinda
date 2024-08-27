@@ -15,12 +15,14 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    Union,
 )
+from uuid import UUID, uuid4
 from weakref import ReferenceType
 
 from flowpilot.common.pydantic import SerializationMixin
-from flowpilot.workflow.pin import EDirection, FPin
-from pydantic import BaseModel
+from flowpilot.workflow.pin import Pin, PinSchema
+from pydantic import BaseModel, Field, PrivateAttr
 from tabulate import tabulate
 
 if TYPE_CHECKING:
@@ -29,7 +31,7 @@ if TYPE_CHECKING:
     from flowpilot.workflow.graph import GGraph
 
 
-class ENodeStatus(Enum):
+class NodeStatus(Enum):
     Initial = 1
     Pending = 2
     Running = 3
@@ -40,19 +42,14 @@ class ENodeStatus(Enum):
     Unknown = 8
 
 
-@dataclass
-class FNodeSchema:
+class NodeSchema(BaseModel):
     name: str = ""
-    pins: Set["FPin"] = field(default_factory=set)
-    owning_graph: ReferenceType["GGraph"] = None
-    status: ENodeStatus = ENodeStatus.Initial
+    pins: Set["PinSchema"] = Field(default_factory=set)
+    owning_graph: Optional[str] = None
+    status: NodeStatus = NodeStatus.Initial
     position: Tuple[float, float] = (0.0, 0.0)
-    metadata: Dict[str, Any] = field(default_factory=dict)
     description: str = ""
-    _id: uuid.UUID = field(default_factory=uuid.uuid4)
-
-    def to_dict(self) -> dict:
-        return asdict(self)
+    id: str = Field(default_factory=lambda: str(uuid4()))
 
 
 class FNodeState(BaseModel):
@@ -70,7 +67,7 @@ class StateMachine:
 # Trick mypy into not applying contravariance rules to inputs by defining
 # forward as a value, rather than a function.  See also
 # https://github.com/python/mypy/issues/8795
-def _forward_unimplemented(self, *input: Any) -> None:
+def _forward_unimplemented(self, *inputs: Any) -> None:
     r"""Define the computation performed at every call.
 
     Should be overridden by all subclasses.
@@ -89,10 +86,16 @@ def _forward_unimplemented(self, *input: Any) -> None:
 class NodeBase(ABC):
 
     _version: int = 1
-    _pins: Dict[str, Optional["FPin"]]
+    _pins: Dict[str, Optional["Pin"]]
     _call_super_init: bool = False
+    s: NodeSchema
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        schema: Union[PinSchema, dict, None] = None,
+        *args,
+        **kwargs,
+    ) -> None:
         if self._call_super_init is False and bool(kwargs):
             raise TypeError(
                 f"{type(self).__name__}.__init__() got an unexpected keyword argument '{next(iter(kwargs))}'"
@@ -105,14 +108,22 @@ class NodeBase(ABC):
                 " given"
             )
 
+        super().__setattr__("id", str(uuid.uuid4()))
         super().__setattr__("_pins", {})
+
+        if isinstance(schema, NodeSchema):
+            self.s = schema
+        elif isinstance(schema, dict):
+            self.s = NodeSchema(**schema)
+        else:
+            self.s = NodeSchema()
 
         if self._call_super_init:
             super().__init__(*args, **kwargs)
 
     forward: Callable[..., Any] = _forward_unimplemented
 
-    def __setattr__(self, name: str, value: "FPin") -> None:
+    def __setattr__(self, name: str, value: "Pin") -> None:
         def remove_from(*dicts_or_sets):
             for d in dicts_or_sets:
                 if name in d:
@@ -122,7 +133,9 @@ class NodeBase(ABC):
                         d.discard(name)
 
         pins = self.__dict__.get("_pins")
-        if isinstance(value, FPin):
+        value.s.owning_node = self.s.id
+
+        if isinstance(value, Pin):
             if pins is None:
                 raise AttributeError(
                     f"cannot assign pin before {self.__class__.__name__}.__init__() call"
@@ -150,13 +163,6 @@ class NodeBase(ABC):
         else:
             super().__delattr__(name)
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-
     def extra_repr(self) -> str:
         r"""Set the extra representation of the module.
 
@@ -165,9 +171,6 @@ class NodeBase(ABC):
         strings are acceptable.
         """
         return ""
-
-    def _get_name(self):
-        return self.__class__.__name__
 
     def _indent(self, s, num_spaces):
         lines = s.split("\n")
@@ -182,20 +185,20 @@ class NodeBase(ABC):
         input_pins_info = [
             (name, "int")
             for name, pin in self._pins.items()
-            if pin and pin.direction == EDirection.INPUT
+            if pin and pin.direction == FPin.EDirection.INPUT
         ]
         output_pins_info = [
             (name, "dict")
             for name, pin in self._pins.items()
-            if pin and pin.direction == EDirection.OUTPUT
+            if pin and pin.direction == FPin.EDirection.OUTPUT
         ]
 
         # 节点名和类型信息
-        node_name = self._get_name()  # 假设有一个方法来获取节点名
+        node_name = self.__class__.__name__  # 假设有一个方法来获取节点名
         node_type = type(self).__name__  # 获取类名作为节点类型
 
         # 构造节点信息部分
-        node_info = f"Node Name: {node_name} Node Type: {node_type}"
+        node_info = f"Node Name: {self.id} Node Type: {node_type}"
 
         # 确定表格的行数
         max_rows = max(len(input_pins_info), len(output_pins_info))
@@ -223,103 +226,116 @@ class NodeBase(ABC):
 
         return full_representation
 
+    def dumps(self):
+        state = self.__dict__.copy()
+        state["_pins"] = {
+            name: pin.model_dump_json() for name, pin in state["_pins"].items()
+        }
+        return state
 
-class GNode(metaclass=ABCMeta):
-    _version: int = 1
+    def loads(self, state: dict):
+        for name, pin in state["_pins"].items():
+            pin = FPin.model_validate_json(pin)
+            state["_pins"][name] = pin
+        self.__dict__.update(state)
 
-    def __init__(
-        self,
-        name: str,
-    ):
-        self._ctx: dict = None
-        self._name = name
-        self._pins: OrderedDict[str, FPin] = {}
-        self._schema = FNodeSchema(
-            name=f"{name}.schema",
-            description="A simple tutorial User Interface for Nodes.",
-        )
-        self.__allocate_default_pins()
 
-    def __allocate_default_pins(self) -> None:
-        """Allocate default pins when the node is instantiated."""
-        self.add_pin(FPin("output", direction=EDirection.OUTPUT))
-        self._input_bindings()
+# class GNode(metaclass=ABCMeta):
+#     _version: int = 1
 
-    @abstractmethod
-    def _input_bindings(self) -> None:
-        pass
+#     def __init__(
+#         self,
+#         name: str,
+#     ):
+#         self._ctx: dict = None
+#         self._name = name
+#         self._pins: OrderedDict[str, FPin] = {}
+#         self._schema = FNodeSchema(
+#             name=f"{name}.schema",
+#             description="A simple tutorial User Interface for Nodes.",
+#         )
+#         self.__allocate_default_pins()
 
-    # def _autowire_new_node(self, weak_pin: ReferenceType["FPin"]):
-    #     """用于在创建新 Node 后，自动将其与指定的 Pin 连接。如果需要，应在创建新 Node 后调用。"""
-    #     pass
+#     def __allocate_default_pins(self) -> None:
+#         """Allocate default pins when the node is instantiated."""
+#         self.add_pin(FPin("output", direction=EDirection.OUTPUT))
+#         self._input_bindings()
 
-    @property
-    def name(self) -> str:
-        return self._name
+#     @abstractmethod
+#     def _input_bindings(self) -> None:
+#         pass
 
-    # def __setattr__(self, __name: str, __value: Any) -> None:
-    #     # super().__setattr__("_schema", OrderedDict())
-    #     super().__setattr__("state", OrderedDict())
-    #     super().__setattr__("_forward_hooks", OrderedDict())
-    #     super().__setattr__("_forward_hooks_with_kwargs", OrderedDict())
+#     # def _autowire_new_node(self, weak_pin: ReferenceType["FPin"]):
+#     #     """用于在创建新 Node 后，自动将其与指定的 Pin 连接。如果需要，应在创建新 Node 后调用。"""
+#     #     pass
 
-    #     if isinstance(__value, GNode):
-    #         nodes = self.__dict__.get("_nodes")
-    #         if nodes is None:
-    #             nodes = self.__dict__["_nodes"] = OrderedDict()
+#     @property
+#     def name(self) -> str:
+#         return self._name
 
-    @property
-    def pins(self) -> Dict[str, FPin]:
-        return self._pins
+#     # def __setattr__(self, __name: str, __value: Any) -> None:
+#     #     # super().__setattr__("_schema", OrderedDict())
+#     #     super().__setattr__("state", OrderedDict())
+#     #     super().__setattr__("_forward_hooks", OrderedDict())
+#     #     super().__setattr__("_forward_hooks_with_kwargs", OrderedDict())
 
-    def build(self, ctx: dict) -> None:
-        """依赖检查"""
-        self._ctx = ctx
+#     #     if isinstance(__value, GNode):
+#     #         nodes = self.__dict__.get("_nodes")
+#     #         if nodes is None:
+#     #             nodes = self.__dict__["_nodes"] = OrderedDict()
 
-    def setup(self):
-        """初始化赋值"""
+#     @property
+#     def pins(self) -> Dict[str, FPin]:
+#         return self._pins
 
-    def reset(self):
-        self._schema.status = ENodeStatus.Pending
+#     def build(self, ctx: dict) -> None:
+#         """依赖检查"""
+#         self._ctx = ctx
 
-    @functools.lru_cache()
-    def get_dependencies(self) -> Set[ReferenceType["GNode"]]:
-        deps_node = set()
-        for pin in self._pins.values():
-            if pin.direction == EDirection.INPUT:
-                for link in pin.links:
-                    deps_node.add(link.owning_node)
-        return deps_node
+#     def setup(self):
+#         """初始化赋值"""
 
-    def add_pin(self, pin: FPin) -> None:
-        if pin.name in self._pins:
-            raise ValueError("Pin name already exists.")
-        pin.owning_node = weakref.ref(self)
-        self._schema.pins.add(pin)
-        self._pins[pin.name] = pin
-        self.get_dependencies.cache_clear()
+#     def reset(self):
+#         self._schema.status = ENodeStatus.Pending
 
-    async def _execute(self):
-        assert self._ctx is not None, "Context is not built yet."
+#     @functools.lru_cache()
+#     def get_dependencies(self) -> Set[ReferenceType["GNode"]]:
+#         deps_node = set()
+#         for pin in self._pins.values():
+#             if pin.direction == EDirection.INPUT:
+#                 for link in pin.links:
+#                     deps_node.add(link.owning_node)
+#         return deps_node
 
-        # if self._schema.status == ENodeStatus.Pending:
-        await self.execute()
+#     def add_pin(self, pin: FPin) -> None:
+#         if pin.name in self._pins:
+#             raise ValueError("Pin name already exists.")
+#         pin.owning_node = weakref.ref(self)
+#         self._schema.pins.add(pin)
+#         self._pins[pin.name] = pin
+#         self.get_dependencies.cache_clear()
 
-        if self._schema.status == ENodeStatus.Finished:
-            for pin in self.pins.values():
-                if pin.direction != EDirection.OUTPUT:
-                    continue
-                for link_pin in pin.links:
-                    if link_pin.direction != EDirection.INPUT:
-                        continue
-                    link_pin.value = pin.value
+#     async def _execute(self):
+#         assert self._ctx is not None, "Context is not built yet."
 
-    @abstractmethod
-    async def execute(self) -> None:
-        pass
+#         # if self._schema.status == ENodeStatus.Pending:
+#         await self.execute()
 
-    def serialize(self):
-        return self._schema.to_dict()
+#         if self._schema.status == ENodeStatus.Finished:
+#             for pin in self.pins.values():
+#                 if pin.direction != EDirection.OUTPUT:
+#                     continue
+#                 for link_pin in pin.links:
+#                     if link_pin.direction != EDirection.INPUT:
+#                         continue
+#                     link_pin.value = pin.value
+
+#     @abstractmethod
+#     async def execute(self) -> None:
+#         pass
+
+#     def serialize(self):
+#         return self._schema.to_dict()
 
 
 # PyTorch隐式注册子模块的过程主要依赖于其内部对`nn.Module`类及其相关属性的操作。具体来说，当你定义一个`nn.Module`的子类，并在其构造函数中通过赋值操作（如`self.some_module = SomeOtherModule()`）添加子模块时，PyTorch会隐式地完成以下几个步骤来注册这些子模块：
@@ -342,22 +358,40 @@ class GNode(metaclass=ABCMeta):
 # 总结来说，PyTorch通过重写`nn.Module`类的`__setattr__`方法，并利用`_modules`字典来隐式地注册子模块。这种设计简化了模型的构建过程，并使得PyTorch模型具有高度可定制性和灵活性。
 
 
+class Schema(BaseModel):
+    name: str
+    description: str = ""
+    pins: List[str] = []
+
+
+class SchemaNode(Schema):
+    type: str = "node"
+    pins: Dict[str, Optional["FPin"]] = Field(default_factory=dict)
+
+    def __init__(self):
+        super().__init__()
+
+
 class MyNode(NodeBase):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.input = FPin(direction=EDirection.INPUT)
-        self.input2 = FPin(direction=EDirection.INPUT)
-        self.input3 = FPin(direction=EDirection.INPUT)
-        self.output = FPin(direction=EDirection.OUTPUT)
+        self.input = FPin()
+        self.input2 = FPin()
+        self.input3 = FPin()
+        self.output = FPin(direction=FPin.EDirection.OUTPUT)
 
 
 if __name__ == "__main__":
 
-    node = MyNode()
-    print(node)
+    # node = MyNode()
+
+    # print(json.dumps(node.dumps()))
     # x = node.__getstate__()
     # print(x)
 
     # node2 = MyNode()
     # b = node2.__setattr__(**x)
     # print(b)
+
+    sn = SchemaNode(name="123")
+    print(sn.pins)
