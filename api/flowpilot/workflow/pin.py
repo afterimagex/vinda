@@ -45,18 +45,14 @@ class PinSchema(BaseModel):
 
 
 class Pin:
-    s: PinSchema
 
     def __init__(self, schema: Union[PinSchema, dict, None] = None) -> None:
-        if isinstance(schema, PinSchema):
-            self.s = schema
-        elif isinstance(schema, dict):
-            self.s = PinSchema(**schema)
-        else:
-            self.s = PinSchema()
+        self._schema = (
+            PinSchema(**schema) if isinstance(schema, dict) else (schema or PinSchema())
+        )
 
     def link(self, other: "Pin") -> None:
-        """link to another pin"""
+        """Link to another pin"""
         if other.s.id not in self.s.links:
             assert self.s.id not in other.s.links
             # Notify owning nodes about upcoming change
@@ -66,7 +62,7 @@ class Pin:
             other.s.links.add(self.s.id)
 
     def unlink(self, other: "Pin") -> None:
-        """break link to another pin"""
+        """Break link to another pin"""
         if other.s.id in self.s.links:
             assert self.s.id in other.s.links
             # Notify owning nodes about upcoming change
@@ -81,6 +77,17 @@ class Pin:
     @classmethod
     def loads(cls, schema: str) -> "Pin":
         return cls(PinSchema.model_validate_json(schema))
+
+    def __getattr__(self, name: str):
+        return getattr(self._schema, name)
+
+    def __setattr__(self, name: str, value):
+        if name == "_schema":
+            super().__setattr__(name, value)
+        elif hasattr(self._schema, name):
+            setattr(self._schema, name, value)
+        else:
+            super().__setattr__(name, value)
 
     def __repr__(self) -> str:
         return str(self.s)
