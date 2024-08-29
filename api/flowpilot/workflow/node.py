@@ -21,8 +21,7 @@ from typing import (
 from uuid import UUID, uuid4
 from weakref import ReferenceType
 
-from flowpilot.common.pydantic import SerializationMixin
-from flowpilot.workflow.pin import Direction, Pin, PinSchema
+from flowpilot.workflow.pin import Direction, Pin
 from pydantic import BaseModel, Field, PrivateAttr
 from tabulate import tabulate
 
@@ -56,7 +55,7 @@ class NodeSchema(BaseModel):
     description: str = ""
     id: str = Field(default_factory=lambda: str(uuid4()))
     _version: int = 1
-    fie: TestField = None
+    # fie: TestField = None
 
 
 class FNodeState(BaseModel):
@@ -92,22 +91,20 @@ def _forward_unimplemented(self, *inputs: Any) -> None:
 
 class NodeBase(ABC):
 
-    _version: int = 1
-    _pins: Dict[str, Pin]  # 类型注解，不会创建类属性
-    _schema: PinSchema
+    # _version: int = 1
+    # _pins: Dict[str, Pin]  # 类型注解，不会创建类属性
+    # _schema: PinSchema
 
-    def __init__(
-        self,
-        schema: Union[PinSchema, dict, None] = None,
-    ) -> None:
-        super().__setattr__(
-            "_schema",
-            (
-                NodeSchema(**schema)
-                if isinstance(schema, dict)
-                else (schema or NodeSchema())
-            ),
-        )
+    id: str
+    name: Optional[str]
+    owning_graph: Optional[str]
+    _pins: Dict[str, Pin]
+    _version: int = 1
+
+    def __init__(self, name: Optional[str] = None) -> None:
+        super().__setattr__("id", str(uuid4()))
+        super().__setattr__("name", name)
+        super().__setattr__("owning_graph", None)
         super().__setattr__("_pins", {})
 
     forward: Callable[..., Any] = _forward_unimplemented
@@ -121,39 +118,23 @@ class NodeBase(ABC):
                     else:
                         d.discard(name)
 
-        schema = self.__dict__.get("_schema")
-        if schema is None:
-            raise AttributeError(
-                f"cannot assign pin before {self.__class__.__name__}.__init__() call"
-            )
-        if name in schema.__dict__:
+        pins = self.__dict__.get("_pins")
+        if isinstance(value, Pin):
+            if pins is None:
+                raise AttributeError(
+                    f"cannot assign pin before {self.__class__.__name__}.__init__() call"
+                )
             remove_from(self.__dict__)
-            setattr(schema, name, value)
+            pins[name] = value
+        elif pins is not None and name in pins:
+            raise TypeError(
+                f"cannot assign '{value.__class__.__name__}' as member of pins '{name}' "
+                "(Pin expected)"
+            )
         else:
-            pins = self.__dict__.get("_pins")
-            if isinstance(value, Pin):
-                if pins is None:
-                    raise AttributeError(
-                        f"cannot assign pin before {self.__class__.__name__}.__init__() call"
-                    )
-                remove_from(self.__dict__)
-                pins[name] = value
-            elif pins is not None and name in pins:
-                if value is not None:
-                    raise TypeError(
-                        f"cannot assign '{value.__class__.__name__}' as member of pins '{name}' "
-                        "(Pin or None expected)"
-                    )
-                pins[name] = value
-            else:
-                super().__setattr__(name, value)
+            super().__setattr__(name, value)
 
     def __getattr__(self, name: str) -> Any:
-        if "_schema" in self.__dict__:
-            schema = self.__dict__["_schema"]
-            if name in schema.__dict__:
-                return getattr(schema, name)
-
         if "_pins" in self.__dict__:
             pins = self.__dict__["_pins"]
             if name in pins:
@@ -232,22 +213,38 @@ class NodeBase(ABC):
 
         return full_representation
 
-    def dumps(self):
+    def dict(self) -> dict:
         state = self.__dict__.copy()
-        state["schema"] = state.pop("_schema").model_dump_json()
-        state["pins"] = json.dumps(
-            {name: pin.dumps() for name, pin in state.pop("_pins").items()}
-        )
+        for k in state["_pins"].keys():
+            state["_pins"][k] = state["_pins"][k].dict()
         return state
 
+    def load(self, state: dict) -> None:
+        for k in state.keys():
+            if k == "_pins":
+                for p in state[k].keys():
+                    self._pins[p].load(state[k][p])
+            super().__setattr__(k, state[k])
+        return self
+
+    def dumps(self) -> str:
+        state = self.dict()
+        print(type(state["_pins"]["inp1"]))
+        # state["_pins"] = list(state["links"])
+        # state["direction"] = self.direction.value
+
+        # state["pins"] = {name: pin.dumps() for name, pin in state.pop("_pins").items()}
+        # return json.dumps(state)
+
     @classmethod
-    def loads(cls, state: dict):
+    def loads(self, state: str):
+        state = json.loads(state)
         schema = state.pop("schema")
-        return cls(PinSchema.model_validate_json(schema))
-        # for name, pin in state["_pins"].items():
-        #     pin = FPin.model_validate_json(pin)
-        #     state["_pins"][name] = pin
-        # self.__dict__.update(state)
+        cls = self(PinSchema.model_validate_json(schema))
+        pins = state.pop("pins")
+        for name, pin in cls.__dict__["_pins"].items():
+            pin = Pin.loads(pins[name])
+        return cls
 
 
 class AsyncAction(NodeBase):
@@ -389,10 +386,10 @@ class AsyncAction(NodeBase):
 class MyNode(NodeBase):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.input = Pin()
-        self.input2 = Pin()
-        self.input3 = Pin()
-        self.output = Pin({"direction": Direction.OUTPUT})
+        self.inp1 = Pin(name="p1")
+        self.inp2 = Pin(name="p2")
+        self.inp3 = Pin(name="p3")
+        self.output = Pin(name="p4")
 
 
 if __name__ == "__main__":
@@ -409,7 +406,11 @@ if __name__ == "__main__":
 
     n1 = MyNode(name="123")
     data = n1.dumps()
+
     print(data)
 
+    # data = '{"schema": "{"name":"","owning_graph":null,"status":1,"position":[0.0,0.0],"description":"","id":"32d81cb6-aa0f-4a5d-bd7c-d15356077fc9"}", "pins": {"input": "{"name":"1","direction":0,"links":[],"owning_node":null,"id":"fc629493-d55d-4436-9141-5ef741eac3ed"}", "input2": "{"name":"2","direction":0,"links":[],"owning_node":null,"id":"d63d6e09-5d67-417d-8856-204e334d1969"}", "input3": "{"name":"3","direction":0,"links":[],"owning_node":null,"id":"9d76484a-c7fa-4c72-ae52-1f59d72d53e7"}", "output": "{"name":"","direction":1,"links":[],"owning_node":null,"id":"48f04555-9f5d-4ad4-8231-d27413ac0128"}"}}'
+
     # n2 = MyNode.loads(data)
-    # print(n2)
+
+    # print(n2.dumps())
