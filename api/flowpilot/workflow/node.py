@@ -1,4 +1,5 @@
 import functools
+import json
 import uuid
 import weakref
 from abc import ABC, ABCMeta, abstractmethod
@@ -42,6 +43,10 @@ class NodeStatus(Enum):
     Unknown = 8
 
 
+class TestField:
+    pass
+
+
 class NodeSchema(BaseModel):
     name: str = ""
     # pins: Set["PinSchema"] = Field(default_factory=set)
@@ -51,6 +56,7 @@ class NodeSchema(BaseModel):
     description: str = ""
     id: str = Field(default_factory=lambda: str(uuid4()))
     _version: int = 1
+    fie: TestField = None
 
 
 class FNodeState(BaseModel):
@@ -143,14 +149,18 @@ class NodeBase(ABC):
                 super().__setattr__(name, value)
 
     def __getattr__(self, name: str) -> Any:
-        if "schema" in self.__dict__:
-            return self.__dict__["schema"]
+        if "_schema" in self.__dict__:
+            schema = self.__dict__["_schema"]
+            if name in schema.__dict__:
+                return getattr(schema, name)
+
         if "_pins" in self.__dict__:
             pins = self.__dict__["_pins"]
             if name in pins:
                 return pins[name]
+
         raise AttributeError(
-            f"'{type(self).__name__}' module has no attribute '{name}'"
+            f"'{type(self).__name__}' object has no attribute '{name}'"
         )
 
     def __delattr__(self, name):
@@ -224,16 +234,20 @@ class NodeBase(ABC):
 
     def dumps(self):
         state = self.__dict__.copy()
-        state["_pins"] = {
-            name: pin.model_dump_json() for name, pin in state["_pins"].items()
-        }
+        state["schema"] = state.pop("_schema").model_dump_json()
+        state["pins"] = json.dumps(
+            {name: pin.dumps() for name, pin in state.pop("_pins").items()}
+        )
         return state
 
-    def loads(self, state: dict):
-        for name, pin in state["_pins"].items():
-            pin = FPin.model_validate_json(pin)
-            state["_pins"][name] = pin
-        self.__dict__.update(state)
+    @classmethod
+    def loads(cls, state: dict):
+        schema = state.pop("schema")
+        return cls(PinSchema.model_validate_json(schema))
+        # for name, pin in state["_pins"].items():
+        #     pin = FPin.model_validate_json(pin)
+        #     state["_pins"][name] = pin
+        # self.__dict__.update(state)
 
 
 class AsyncAction(NodeBase):
@@ -393,5 +407,9 @@ if __name__ == "__main__":
     # b = node2.__setattr__(**x)
     # print(b)
 
-    sn = MyNode(name="123")
-    print(sn)
+    n1 = MyNode(name="123")
+    data = n1.dumps()
+    print(data)
+
+    # n2 = MyNode.loads(data)
+    # print(n2)

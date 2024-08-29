@@ -115,8 +115,8 @@ class Pin:
         return self._schema.model_dump_json()
 
     @classmethod
-    def loads(cls, schema: str) -> "Pin":
-        return cls(PinSchema.model_validate_json(schema))
+    def loads(cls, state: str) -> "Pin":
+        return cls(PinSchema.model_validate_json(state))
 
 
 class MyPin(Pin):
@@ -126,16 +126,21 @@ class MyPin(Pin):
 
 
 if __name__ == "__main__":
+    import json
 
-    p = Pin({"name": "1235"})
-    print(p.name)
+    p1 = Pin({"name": "1235"})
+    print(p1)
     p2 = Pin({"name": "1234"})
-    print(p2.name)
+    print(p2)
 
-    p.link(p2)
-    p.name = "00"
+    p1.link(p2)
+    print(p1)
 
-    print(p)
+    dp = p1.dumps()
+    print(dp)
+
+    p3 = Pin.loads(dp)
+    print(p3)
 
     # d = Pin({"name": "123"})
     # print(d)
