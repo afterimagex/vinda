@@ -42,67 +42,107 @@ class PinSchema(BaseModel):
     links: Set[str] = Field(default_factory=set)
     owning_node: Optional[str] = None
     id: str = Field(default_factory=lambda: str(uuid4()))
+    _version: int = 1
 
 
 class Pin:
+    _schema: PinSchema
 
     def __init__(self, schema: Union[PinSchema, dict, None] = None) -> None:
-        self._schema = (
-            PinSchema(**schema) if isinstance(schema, dict) else (schema or PinSchema())
+        super().__setattr__(
+            "_schema",
+            (
+                PinSchema(**schema)
+                if isinstance(schema, dict)
+                else (schema or PinSchema())
+            ),
         )
+
+    def __repr__(self) -> str:
+        return str(self._schema)
+
+    def __setattr__(self, name: str, value: "Pin") -> None:
+        schema = self.__dict__.get("_schema")
+        if schema is None:
+            raise AttributeError(
+                f"cannot assign pin before {self.__class__.__name__}.__init__() call"
+            )
+        if name in schema.__dict__:
+            setattr(schema, name, value)
+        else:
+            super().__setattr__(name, value)
+
+    def __getattr__(self, name: str) -> Any:
+        if "_schema" in self.__dict__:
+            schema = self.__dict__["_schema"]
+            if name in schema.__dict__:
+                return getattr(schema, name)
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
+
+    def __delattr__(self, name):
+        if "_schema" in self.__dict__:
+            schema = self.__dict__["_schema"]
+            if name in schema.__dict__:
+                raise AttributeError(
+                    f"'{type(self).__name__}' object can not del attribute '{name}'"
+                )
+        else:
+            super().__delattr__(name)
 
     def link(self, other: "Pin") -> None:
         """Link to another pin"""
-        if other.s.id not in self.s.links:
-            assert self.s.id not in other.s.links
+        if other.id not in self.links:
+            assert self.id not in other.links
             # Notify owning nodes about upcoming change
             # self.modify()
             # other.modify()
-            self.s.links.add(other.s.id)
-            other.s.links.add(self.s.id)
+            self.links.add(other.id)
+            other.links.add(self.id)
 
     def unlink(self, other: "Pin") -> None:
         """Break link to another pin"""
-        if other.s.id in self.s.links:
-            assert self.s.id in other.s.links
+        if other.id in self.links:
+            assert self.id in other.links
             # Notify owning nodes about upcoming change
             # self.modify()
             # other.modify()
-            self.s.links.remove(other.s.id)
-            other.s.links.remove(self.s.id)
+            self.links.remove(other.id)
+            other.links.remove(self.id)
 
     def dumps(self) -> str:
-        return self.s.model_dump_json()
+        return self._schema.model_dump_json()
 
     @classmethod
     def loads(cls, schema: str) -> "Pin":
         return cls(PinSchema.model_validate_json(schema))
 
-    def __getattr__(self, name: str):
-        return getattr(self._schema, name)
 
-    def __setattr__(self, name: str, value):
-        if name == "_schema":
-            super().__setattr__(name, value)
-        elif hasattr(self._schema, name):
-            setattr(self._schema, name, value)
-        else:
-            super().__setattr__(name, value)
-
-    def __repr__(self) -> str:
-        return str(self.s)
+class MyPin(Pin):
+    def __init__(self, schema: PinSchema | Dict | None = None) -> None:
+        super().__init__(schema)
+        self.name = "09"
 
 
 if __name__ == "__main__":
-    # pass
-    # import json
 
-    d = Pin({"name": "123"})
-    print(d)
-    r = d.dumps()
-    print(r)
-    f = Pin.loads(r)
-    print(f)
+    p = Pin({"name": "1235"})
+    print(p.name)
+    p2 = Pin({"name": "1234"})
+    print(p2.name)
+
+    p.link(p2)
+    p.name = "00"
+
+    print(p)
+
+    # d = Pin({"name": "123"})
+    # print(d)
+    # r = d.dumps()
+    # print(r)
+    # f = Pin.loads(r)
+    # print(f)
     # # no = No()
     # # k = weakref.ref(no)
     # p1 = Pin(name="123")

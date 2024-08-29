@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 from weakref import ReferenceType
 
 from flowpilot.common.pydantic import SerializationMixin
-from flowpilot.workflow.pin import Pin, PinSchema
+from flowpilot.workflow.pin import Direction, Pin, PinSchema
 from pydantic import BaseModel, Field, PrivateAttr
 from tabulate import tabulate
 
@@ -44,12 +44,13 @@ class NodeStatus(Enum):
 
 class NodeSchema(BaseModel):
     name: str = ""
-    pins: Set["PinSchema"] = Field(default_factory=set)
+    # pins: Set["PinSchema"] = Field(default_factory=set)
     owning_graph: Optional[str] = None
     status: NodeStatus = NodeStatus.Initial
     position: Tuple[float, float] = (0.0, 0.0)
     description: str = ""
     id: str = Field(default_factory=lambda: str(uuid4()))
+    _version: int = 1
 
 
 class FNodeState(BaseModel):
@@ -86,40 +87,22 @@ def _forward_unimplemented(self, *inputs: Any) -> None:
 class NodeBase(ABC):
 
     _version: int = 1
-    _pins: Dict[str, Optional["Pin"]]
-    _call_super_init: bool = False
-    s: NodeSchema
+    _pins: Dict[str, Pin]  # 类型注解，不会创建类属性
+    _schema: PinSchema
 
     def __init__(
         self,
         schema: Union[PinSchema, dict, None] = None,
-        *args,
-        **kwargs,
     ) -> None:
-        if self._call_super_init is False and bool(kwargs):
-            raise TypeError(
-                f"{type(self).__name__}.__init__() got an unexpected keyword argument '{next(iter(kwargs))}'"
-                ""
-            )
-
-        if self._call_super_init is False and bool(args):
-            raise TypeError(
-                f"{type(self).__name__}.__init__() takes 1 positional argument but {len(args) + 1} were"
-                " given"
-            )
-
-        super().__setattr__("id", str(uuid.uuid4()))
+        super().__setattr__(
+            "_schema",
+            (
+                NodeSchema(**schema)
+                if isinstance(schema, dict)
+                else (schema or NodeSchema())
+            ),
+        )
         super().__setattr__("_pins", {})
-
-        if isinstance(schema, NodeSchema):
-            self.s = schema
-        elif isinstance(schema, dict):
-            self.s = NodeSchema(**schema)
-        else:
-            self.s = NodeSchema()
-
-        if self._call_super_init:
-            super().__init__(*args, **kwargs)
 
     forward: Callable[..., Any] = _forward_unimplemented
 
@@ -132,30 +115,43 @@ class NodeBase(ABC):
                     else:
                         d.discard(name)
 
-        pins = self.__dict__.get("_pins")
-        value.s.owning_node = self.s.id
-
-        if isinstance(value, Pin):
-            if pins is None:
-                raise AttributeError(
-                    f"cannot assign pin before {self.__class__.__name__}.__init__() call"
-                )
+        schema = self.__dict__.get("_schema")
+        if schema is None:
+            raise AttributeError(
+                f"cannot assign pin before {self.__class__.__name__}.__init__() call"
+            )
+        if name in schema.__dict__:
             remove_from(self.__dict__)
-            pins[name] = value
-        elif pins is not None and name in pins:
-            if value is not None:
-                raise TypeError(
-                    f"cannot assign '{value.__class__.__name__}' as {self.__class__.__name__} '{name}' "
-                    "(pin or None expected)"
-                )
-            pins[name] = value
+            setattr(schema, name, value)
+        else:
+            pins = self.__dict__.get("_pins")
+            if isinstance(value, Pin):
+                if pins is None:
+                    raise AttributeError(
+                        f"cannot assign pin before {self.__class__.__name__}.__init__() call"
+                    )
+                remove_from(self.__dict__)
+                pins[name] = value
+            elif pins is not None and name in pins:
+                if value is not None:
+                    raise TypeError(
+                        f"cannot assign '{value.__class__.__name__}' as member of pins '{name}' "
+                        "(Pin or None expected)"
+                    )
+                pins[name] = value
+            else:
+                super().__setattr__(name, value)
 
     def __getattr__(self, name: str) -> Any:
+        if "schema" in self.__dict__:
+            return self.__dict__["schema"]
         if "_pins" in self.__dict__:
             pins = self.__dict__["_pins"]
             if name in pins:
                 return pins[name]
-        raise AttributeError(f"'{type(self).__name__}' node has no attribute '{name}'")
+        raise AttributeError(
+            f"'{type(self).__name__}' module has no attribute '{name}'"
+        )
 
     def __delattr__(self, name):
         if name in self._pins:
@@ -185,12 +181,12 @@ class NodeBase(ABC):
         input_pins_info = [
             (name, "int")
             for name, pin in self._pins.items()
-            if pin and pin.direction == FPin.EDirection.INPUT
+            if pin and pin.direction == Direction.INPUT
         ]
         output_pins_info = [
             (name, "dict")
             for name, pin in self._pins.items()
-            if pin and pin.direction == FPin.EDirection.OUTPUT
+            if pin and pin.direction == Direction.OUTPUT
         ]
 
         # 节点名和类型信息
@@ -238,6 +234,10 @@ class NodeBase(ABC):
             pin = FPin.model_validate_json(pin)
             state["_pins"][name] = pin
         self.__dict__.update(state)
+
+
+class AsyncAction(NodeBase):
+    pass
 
 
 # class GNode(metaclass=ABCMeta):
@@ -358,27 +358,27 @@ class NodeBase(ABC):
 # 总结来说，PyTorch通过重写`nn.Module`类的`__setattr__`方法，并利用`_modules`字典来隐式地注册子模块。这种设计简化了模型的构建过程，并使得PyTorch模型具有高度可定制性和灵活性。
 
 
-class Schema(BaseModel):
-    name: str
-    description: str = ""
-    pins: List[str] = []
+# class Schema(BaseModel):
+#     name: str
+#     description: str = ""
+#     pins: List[str] = []
 
 
-class SchemaNode(Schema):
-    type: str = "node"
-    pins: Dict[str, Optional["FPin"]] = Field(default_factory=dict)
+# class SchemaNode(Schema):
+#     type: str = "node"
+#     pins: Dict[str, Optional["FPin"]] = Field(default_factory=dict)
 
-    def __init__(self):
-        super().__init__()
+#     def __init__(self):
+#         super().__init__()
 
 
 class MyNode(NodeBase):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__()
-        self.input = FPin()
-        self.input2 = FPin()
-        self.input3 = FPin()
-        self.output = FPin(direction=FPin.EDirection.OUTPUT)
+        self.input = Pin()
+        self.input2 = Pin()
+        self.input3 = Pin()
+        self.output = Pin({"direction": Direction.OUTPUT})
 
 
 if __name__ == "__main__":
@@ -393,5 +393,5 @@ if __name__ == "__main__":
     # b = node2.__setattr__(**x)
     # print(b)
 
-    sn = SchemaNode(name="123")
-    print(sn.pins)
+    sn = MyNode(name="123")
+    print(sn)
