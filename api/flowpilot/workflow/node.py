@@ -1,3 +1,4 @@
+import copy
 import functools
 import json
 import uuid
@@ -90,10 +91,6 @@ def _forward_unimplemented(self, *inputs: Any) -> None:
 
 
 class NodeBase(ABC):
-
-    # _version: int = 1
-    # _pins: Dict[str, Pin]  # 类型注解，不会创建类属性
-    # _schema: PinSchema
 
     id: str
     name: Optional[str]
@@ -214,9 +211,9 @@ class NodeBase(ABC):
         return full_representation
 
     def dict(self) -> dict:
-        state = self.__dict__.copy()
+        state = copy.deepcopy(self.__dict__)
         for k in state["_pins"].keys():
-            state["_pins"][k] = state["_pins"][k].dict()
+            state["_pins"][k] = self._pins[k].dict()
         return state
 
     def load(self, state: dict) -> None:
@@ -229,7 +226,10 @@ class NodeBase(ABC):
 
     def dumps(self) -> str:
         state = self.dict()
-        print(type(state["_pins"]["inp1"]))
+        for k in state["_pins"].keys():
+            state["_pins"][k] = self._pins[k].dumps()
+        return state
+        # print(type(state["_pins"]["inp1"]))
         # state["_pins"] = list(state["links"])
         # state["direction"] = self.direction.value
 
@@ -405,10 +405,13 @@ if __name__ == "__main__":
     # print(b)
 
     n1 = MyNode(name="123")
+    # n1.dict()
+    # print(n1._pins["inp1"])
     data = n1.dumps()
 
     print(data)
 
+    # n1.load(data)
     # data = '{"schema": "{"name":"","owning_graph":null,"status":1,"position":[0.0,0.0],"description":"","id":"32d81cb6-aa0f-4a5d-bd7c-d15356077fc9"}", "pins": {"input": "{"name":"1","direction":0,"links":[],"owning_node":null,"id":"fc629493-d55d-4436-9141-5ef741eac3ed"}", "input2": "{"name":"2","direction":0,"links":[],"owning_node":null,"id":"d63d6e09-5d67-417d-8856-204e334d1969"}", "input3": "{"name":"3","direction":0,"links":[],"owning_node":null,"id":"9d76484a-c7fa-4c72-ae52-1f59d72d53e7"}", "output": "{"name":"","direction":1,"links":[],"owning_node":null,"id":"48f04555-9f5d-4ad4-8231-d27413ac0128"}"}}'
 
     # n2 = MyNode.loads(data)

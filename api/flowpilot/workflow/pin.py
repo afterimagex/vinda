@@ -1,3 +1,4 @@
+import copy
 import json
 from enum import Enum
 from typing import Optional, Set
@@ -25,8 +26,8 @@ class Pin:
         super().__setattr__("links", set())
         super().__setattr__("owning_node", None)
 
-    def __repr__(self) -> str:
-        return self.dumps()
+    # def __repr__(self) -> str:
+    #     return self.dumps()
 
     def link(self, other: "Pin") -> None:
         """Link to another pin"""
@@ -43,7 +44,7 @@ class Pin:
             other.links.remove(self.id)
 
     def dict(self) -> dict:
-        return self.__dict__.copy()
+        return copy.deepcopy(self.__dict__)
 
     def load(self, state: dict) -> None:
         for k in state.keys():
