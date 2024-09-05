@@ -12,10 +12,10 @@ from enum import Enum
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from weakref import ReferenceType
 
-from flowpilot.workflow.node import GNode
+from flowpilot.workflow.node import NodeBase
 
 
-def get_reverse_dependencies(nodes: Iterable["GNode"]) -> Dict[str, List[str]]:
+def get_reverse_dependencies(nodes: Iterable[NodeBase]) -> Dict[str, List[str]]:
     dependents = defaultdict(list)
 
     if not nodes:
@@ -23,34 +23,34 @@ def get_reverse_dependencies(nodes: Iterable["GNode"]) -> Dict[str, List[str]]:
 
     for node in nodes:
         for deps_node in node.get_dependencies():
-            dependents[deps_node().name].append(node.name)
+            dependents[deps_node.id].append(node.id)
 
     return dependents
 
 
-def topological_sort(nodes: Iterable["GNode"]) -> List[str]:
+def topological_sort(nodes: Iterable[NodeBase]) -> List[str]:
 
     sorted_nodes = []
 
     if not nodes:
         return sorted_nodes
 
-    in_degree = {node.name: len(node.get_dependencies()) for node in nodes}
+    in_degree = {node.id: len(node.get_dependencies()) for node in nodes}
 
     reverse_dependencies = get_reverse_dependencies(nodes)
 
     no_dependency_nodes = deque(
-        [name for name, degree in in_degree.items() if degree == 0]
+        [node_id for node_id, degree in in_degree.items() if degree == 0]
     )
 
     while no_dependency_nodes:
-        current_node_name = no_dependency_nodes.popleft()
-        sorted_nodes.append(current_node_name)
+        current_node_id = no_dependency_nodes.popleft()
+        sorted_nodes.append(current_node_id)
 
-        for dependent_name in reverse_dependencies[current_node_name]:
-            in_degree[dependent_name] -= 1
-            if in_degree[dependent_name] == 0:
-                no_dependency_nodes.append(dependent_name)
+        for dependent_id in reverse_dependencies[current_node_id]:
+            in_degree[dependent_id] -= 1
+            if in_degree[dependent_id] == 0:
+                no_dependency_nodes.append(dependent_id)
 
     if len(sorted_nodes) != len(nodes):
         raise ValueError("Cyclic dependency detected!")

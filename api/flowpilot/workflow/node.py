@@ -1,35 +1,28 @@
+"""
+Module Summary:
+This module provides a simple example to demonstrate how to
+add a module-level docstring in the style commonly used in Apache projects.
+
+Details:
+The module includes a Direction enum, a Pin class, and a MyNode class.
+"""
+
 import copy
-import functools
 import json
-import uuid
-import weakref
-from abc import ABC, ABCMeta, abstractmethod
-from collections import OrderedDict
-from dataclasses import asdict, dataclass, field
+from abc import ABC
 from enum import Enum
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
-from uuid import UUID, uuid4
-from weakref import ReferenceType
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, Set, TypeVar
+from uuid import uuid4
 
 from flowpilot.workflow.pin import Direction, Pin
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel
 from tabulate import tabulate
 
 if TYPE_CHECKING:
-    from weakref import ReferenceType
 
-    from flowpilot.workflow.graph import GGraph
+    from flowpilot.workflow.graph import GraphContext
+
+T = TypeVar("T", bound="NodeBase")
 
 
 class NodeStatus(Enum):
@@ -43,20 +36,20 @@ class NodeStatus(Enum):
     Unknown = 8
 
 
-class TestField:
-    pass
+# class TestField:
+#     pass
 
 
-class NodeSchema(BaseModel):
-    name: str = ""
-    # pins: Set["PinSchema"] = Field(default_factory=set)
-    owning_graph: Optional[str] = None
-    status: NodeStatus = NodeStatus.Initial
-    position: Tuple[float, float] = (0.0, 0.0)
-    description: str = ""
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    _version: int = 1
-    # fie: TestField = None
+# class NodeSchema(BaseModel):
+#     name: str = ""
+#     # pins: Set["PinSchema"] = Field(default_factory=set)
+#     owning_graph: Optional[str] = None
+#     status: NodeStatus = NodeStatus.Initial
+#     position: Tuple[float, float] = (0.0, 0.0)
+#     description: str = ""
+#     id: str = Field(default_factory=lambda: str(uuid4()))
+#     _version: int = 1
+# fie: TestField = None
 
 
 class FNodeState(BaseModel):
@@ -93,6 +86,7 @@ def _forward_unimplemented(self, *inputs: Any) -> None:
 class NodeBase(ABC):
 
     id: str
+    ctx: Optional["GraphContext"]
     name: Optional[str]
     owning_graph: Optional[str]
     _pins: Dict[str, Pin]
@@ -100,13 +94,27 @@ class NodeBase(ABC):
 
     def __init__(self, name: Optional[str] = None) -> None:
         super().__setattr__("id", str(uuid4()))
-        super().__setattr__("name", name)
+        super().__setattr__("ctx", None)
+        super().__setattr__(
+            "name", f"{self.__class__.__name__}_{id(self)}" if name is None else name
+        )
         super().__setattr__("owning_graph", None)
         super().__setattr__("_pins", {})
 
+        from flowpilot.workflow.graph import Graph
+
+        # Automatically add this node to the current graph if it exists
+        current_graph = Graph.get_current_graph()
+        if current_graph:
+            current_graph.add_nodes(self)
+
     forward: Callable[..., Any] = _forward_unimplemented
 
-    def __setattr__(self, name: str, value: "Pin") -> None:
+    @property
+    def pins(self) -> Iterator[Pin]:
+        return iter(self._pins.values())
+
+    def __setattr__(self, name: str, value: Pin) -> None:
         def remove_from(*dicts_or_sets):
             for d in dicts_or_sets:
                 if name in d:
@@ -122,12 +130,16 @@ class NodeBase(ABC):
                     f"cannot assign pin before {self.__class__.__name__}.__init__() call"
                 )
             remove_from(self.__dict__)
+            value.name = f"{self.name}.{name if value.name is None else value.name}"
+            value.owning_node = self.id
             pins[name] = value
         elif pins is not None and name in pins:
-            raise TypeError(
-                f"cannot assign '{value.__class__.__name__}' as member of pins '{name}' "
-                "(Pin expected)"
-            )
+            if value is not None:
+                raise TypeError(
+                    f"cannot assign '{value.__class__.__name__}' as member of pins '{name}' "
+                    "(Pin or None expected)"
+                )
+            pins[name] = value
         else:
             super().__setattr__(name, value)
 
@@ -164,7 +176,10 @@ class NodeBase(ABC):
         indented_lines = [(num_spaces * " ") + line for line in lines]
         return first + "\n" + "\n".join(indented_lines)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.__dict__})"
+
+    def table(self):
         # 提取输入和输出引脚名称以及其他信息
         input_pins_info = [
             (name, "int")
@@ -210,46 +225,88 @@ class NodeBase(ABC):
 
         return full_representation
 
-    def dict(self) -> dict:
+    def dump(self) -> dict:
         state = copy.deepcopy(self.__dict__)
-        for k in state["_pins"].keys():
-            state["_pins"][k] = self._pins[k].dict()
+        state.pop("ctx")
+        for pin_name in state["_pins"].keys():
+            state["_pins"][pin_name] = self._pins[pin_name].dump()
         return state
 
-    def load(self, state: dict) -> None:
-        for k in state.keys():
-            if k == "_pins":
-                for p in state[k].keys():
-                    self._pins[p].load(state[k][p])
-            super().__setattr__(k, state[k])
+    def load(self, state: dict) -> T:
+        state = copy.deepcopy(state)
+        for key in state.keys():
+            if key == "_pins":
+                for pin_name in state[key].keys():
+                    self._pins[pin_name].load(state["_pins"][pin_name])
+            else:
+                super().__setattr__(key, state[key])
         return self
 
     def dumps(self) -> str:
-        state = self.dict()
-        for k in state["_pins"].keys():
-            state["_pins"][k] = self._pins[k].dumps()
-        return state
-        # print(type(state["_pins"]["inp1"]))
-        # state["_pins"] = list(state["links"])
-        # state["direction"] = self.direction.value
-
-        # state["pins"] = {name: pin.dumps() for name, pin in state.pop("_pins").items()}
-        # return json.dumps(state)
+        return json.dumps(self.dump())
 
     @classmethod
-    def loads(self, state: str):
-        state = json.loads(state)
-        schema = state.pop("schema")
-        cls = self(PinSchema.model_validate_json(schema))
-        pins = state.pop("pins")
-        for name, pin in cls.__dict__["_pins"].items():
-            pin = Pin.loads(pins[name])
+    def loads(self, state: str) -> T:
+        cls = self()
+        cls.load(json.loads(state))
         return cls
+
+    def get_dependencies(self) -> Set[T]:
+        if getattr(self, "ctx") is None:
+            raise RuntimeError("Node must be created with a context.")
+        deps_node = set()
+        for pin in self._pins.values():
+            if pin.direction == Direction.INPUT:
+                for pin_id in pin.links:
+                    pin = self.ctx.get_pin(pin_id)
+                    deps_node.add(self.ctx.get_node(pin.owning_node))
+        return deps_node
 
 
 class AsyncAction(NodeBase):
     pass
 
+
+if __name__ == "__main__":
+
+    class MyNode(NodeBase):
+        def __init__(self, name: Optional[str] = None) -> None:
+            super().__init__(name)
+            self.inp1 = Pin()
+            self.inp2 = Pin()
+            self.inp3 = Pin()
+            self.output = Pin(direction=Direction.OUTPUT)
+
+    class MyNode2(MyNode):
+        def __init__(self, name: Optional[str] = None) -> None:
+            super().__init__(name)
+            self.input = Pin()
+            self.output = Pin(direction=Direction.OUTPUT)
+
+    node = MyNode(name="MyNode")
+
+    print("==> dump")
+    data = node.dump()
+    print(data)
+
+    print("==> load")
+    data["name"] = "loaded"
+    node = node.load(data)
+    print(node)
+
+    print("==> dumps")
+    data = node.dumps()
+    print(data)
+
+    print("==> loads")
+    node = MyNode.loads(data)
+    print(node)
+
+    print("==> MyNode2")
+    node2 = MyNode2(name="MyNode2")
+    node2.input.link(node.output)
+
+    # print(node2.get_dependencies())
 
 # class GNode(metaclass=ABCMeta):
 #     _version: int = 1
@@ -381,39 +438,3 @@ class AsyncAction(NodeBase):
 
 #     def __init__(self):
 #         super().__init__()
-
-
-class MyNode(NodeBase):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__()
-        self.inp1 = Pin(name="p1")
-        self.inp2 = Pin(name="p2")
-        self.inp3 = Pin(name="p3")
-        self.output = Pin(name="p4")
-
-
-if __name__ == "__main__":
-
-    # node = MyNode()
-
-    # print(json.dumps(node.dumps()))
-    # x = node.__getstate__()
-    # print(x)
-
-    # node2 = MyNode()
-    # b = node2.__setattr__(**x)
-    # print(b)
-
-    n1 = MyNode(name="123")
-    # n1.dict()
-    # print(n1._pins["inp1"])
-    data = n1.dumps()
-
-    print(data)
-
-    # n1.load(data)
-    # data = '{"schema": "{"name":"","owning_graph":null,"status":1,"position":[0.0,0.0],"description":"","id":"32d81cb6-aa0f-4a5d-bd7c-d15356077fc9"}", "pins": {"input": "{"name":"1","direction":0,"links":[],"owning_node":null,"id":"fc629493-d55d-4436-9141-5ef741eac3ed"}", "input2": "{"name":"2","direction":0,"links":[],"owning_node":null,"id":"d63d6e09-5d67-417d-8856-204e334d1969"}", "input3": "{"name":"3","direction":0,"links":[],"owning_node":null,"id":"9d76484a-c7fa-4c72-ae52-1f59d72d53e7"}", "output": "{"name":"","direction":1,"links":[],"owning_node":null,"id":"48f04555-9f5d-4ad4-8231-d27413ac0128"}"}}'
-
-    # n2 = MyNode.loads(data)
-
-    # print(n2.dumps())

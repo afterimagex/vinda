@@ -19,15 +19,20 @@ class Pin:
     owning_node: Optional[str]
     _version: int = 1
 
-    def __init__(self, name: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        direction: Direction = Direction.INPUT,
+        owning_node: Optional[str] = None,
+    ) -> None:
         super().__setattr__("id", str(uuid4()))
         super().__setattr__("name", name)
-        super().__setattr__("direction", Direction.INPUT)
+        super().__setattr__("direction", direction)
         super().__setattr__("links", set())
-        super().__setattr__("owning_node", None)
+        super().__setattr__("owning_node", owning_node)
 
-    # def __repr__(self) -> str:
-    #     return self.dumps()
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.__dict__})"
 
     def link(self, other: "Pin") -> None:
         """Link to another pin"""
@@ -43,23 +48,23 @@ class Pin:
             self.links.remove(other.id)
             other.links.remove(self.id)
 
-    def dict(self) -> dict:
-        return copy.deepcopy(self.__dict__)
+    def dump(self):
+        state = copy.deepcopy(self.__dict__)
+        state["links"] = list(state["links"])
+        state["direction"] = self.direction.value
+        return state
 
-    def load(self, state: dict) -> None:
-        for k in state.keys():
-            if k == "direction":
-                state[k] = Direction(state[k])
-            elif k == "links":
-                state[k] = set(state[k])
-            super().__setattr__(k, state[k])
+    def load(self, state: dict) -> "Pin":
+        for key in state.keys():
+            if key == "links":
+                state[key] = set(state[key])
+            elif key == "direction":
+                state[key] = Direction(state[key])
+            super().__setattr__(key, state[key])
         return self
 
     def dumps(self) -> str:
-        state = self.dict()
-        state["links"] = list(state["links"])
-        state["direction"] = self.direction.value
-        return json.dumps(state)
+        return json.dumps(self.dump())
 
     @classmethod
     def loads(self, state: str) -> "Pin":
@@ -70,28 +75,21 @@ class Pin:
 
 if __name__ == "__main__":
 
-    p1 = Pin(name="1")
-    print(p1)
-    p2 = Pin(name="2")
-    print(p2)
+    pin = Pin(name="test", direction=Direction.INPUT)
 
-    p1.link(p2)
-    print(p1)
+    print("==> dump")
+    data = pin.dump()
+    print(type(data), data)
 
-    print("***")
+    print("==> load")
+    data["name"] = "loaded"
+    pin = pin.load(data)
+    print(type(pin), pin)
 
-    dp = p1.dumps()
-    print(dp)
+    print("==> dumps")
+    data = pin.dumps()
+    print(type(data), data)
 
-    p3 = Pin.loads(dp)
-    print(p3)
-
-    print("***")
-
-    d2 = p1.json()
-    print(p1)
-
-    d3 = Pin()
-    d4 = d3.load(d2)
-
-    print(d4)
+    print("==> loads")
+    pin = Pin.loads(data)
+    print(type(pin), pin)
