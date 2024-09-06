@@ -32,18 +32,14 @@ T = TypeVar("T", bound="NodeBase")
 
 
 class NodeStatus(Enum):
-    Initial = 1
-    Pending = 2
-    Running = 3
-    Paused = 4
-    Finished = 5
-    Failed = 6
-    Canceled = 7
-    Unknown = 8
-
-
-class FNodeState(BaseModel):
-    pass
+    Initial = 0
+    Pending = 1
+    Running = 2
+    Paused = 3
+    Finished = 4
+    Failed = 5
+    Canceled = 6
+    Unknown = 7
 
 
 class StateMachine:
@@ -59,6 +55,7 @@ class NodeBase(ABC):
     id: str
     ctx: Optional["GraphContext"]
     name: Optional[str]
+    status: NodeStatus
     owning_graph: Optional[str]
     _pins: Dict[str, Pin]
     _version: int = 1
@@ -69,17 +66,26 @@ class NodeBase(ABC):
         super().__setattr__(
             "name", f"{self.__class__.__name__}_{id(self)}" if name is None else name
         )
+        super().__setattr__("status", NodeStatus.Initial)
         super().__setattr__("owning_graph", None)
         super().__setattr__("_pins", {})
 
         # Automatically add this node to the current graph if it exists
 
     @abstractmethod
-    async def execute(self, *args, **kwargs) -> None:
+    async def execute(self) -> None:
         pass
 
     async def execute_internal(self):
-        pass
+        self.status = NodeStatus.Running
+        try:
+            await self.execute()
+        except Exception:
+            self.status = NodeStatus.Failed
+            return
+        self.status = NodeStatus.Finished
+        for pin in self._pins.values():
+
 
     @property
     def pins(self) -> Iterator[Pin]:
@@ -199,6 +205,7 @@ class NodeBase(ABC):
     def dump(self) -> dict:
         state = copy.deepcopy(self.__dict__)
         state["class"] = self.__class__.__name__
+        state["status"] = self.status.value
         state["pins"] = {k: v.dump() for k, v in state["_pins"].items()}
         state.pop("owning_graph")
         state.pop("_pins")
@@ -212,6 +219,8 @@ class NodeBase(ABC):
             if key == "pins":
                 for pin_name in state[key].keys():
                     setattr(self, pin_name, Pin().load(state["pins"][pin_name]))
+            elif key == "status":
+                state[key] = NodeStatus(state[key])
             else:
                 super().__setattr__(key, state[key])
         return self
@@ -275,8 +284,7 @@ if __name__ == "__main__":
 
     print("==> MyNode2")
     node2 = MyNode(name="MyNode2")
-    node2.input.link(node.output)
-
+    node2.inp1.link(node.output)
     # print(node2.get_dependencies())
 
 # class GNode(metaclass=ABCMeta):
