@@ -10,7 +10,7 @@ class GraphExecutor:
         self._parallel = parallel
 
     async def _parallel_execute(self):
-        task_coroutines = {node.id: node.execute() for node in self._graph.nodes}
+        task_coroutines = {node.id: node.inner_execute() for node in self._graph.nodes}
         sorted_node_ids = list(task_coroutines.keys())
         completed_tasks = set()
 
@@ -21,9 +21,7 @@ class GraphExecutor:
                 for node_id in sorted_node_ids
                 if all(
                     deps_node.id in completed_tasks
-                    for deps_node in self._graph.ctx.get_node(
-                        node_id
-                    ).get_dependencies()
+                    for deps_node in self._graph.get_node(node_id).get_dependencies()
                 )
             ]
 
@@ -58,6 +56,7 @@ class GraphExecutor:
 
 
 if __name__ == "__main__":
+    import json
     from datetime import datetime
     from typing import Optional
 
@@ -68,14 +67,23 @@ if __name__ == "__main__":
     class MyNode(NodeBase):
         def __init__(self, name: Optional[str] = None) -> None:
             super().__init__(name)
-            self.arg1 = Pin("arg1")
-            self.arg2 = Pin("arg2")
-            self.output = Pin(direction=Direction.OUTPUT)
+            self.arg1 = Pin()
+            self.arg2 = Pin()
+            self.out1 = Pin(direction=Direction.OUTPUT)
+            self.out2 = Pin(direction=Direction.OUTPUT)
 
-        async def execute(self, *args, **kwargs) -> None:
+        async def execute(self) -> None:
             date = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-            print(f"Node({self.name}) start at {date}")
+            arg1_input_node = self.arg1.get_input_node(self.ctx)
+            arg2_input_node = self.arg2.get_input_node(self.ctx)
+            print(
+                f"Node({self.name}) start at {date}, "
+                f"arg1 from {arg1_input_node.name if arg1_input_node else 'null'}, value: {self.arg1.value}, "
+                f"arg2 from {arg2_input_node.name if arg2_input_node else 'null'}, value: {self.arg2.value} "
+            )
             await asyncio.sleep(1)
+            self.out1.value = date
+            self.out2.value = date
 
     n1 = MyNode("n1")
     n2 = MyNode("n2")
@@ -83,14 +91,20 @@ if __name__ == "__main__":
     n4 = MyNode("n4")
     n5 = MyNode("n5")
 
-    n1.output.link(n3.arg1)
-    n3.output.link(n4.arg1)
-    n4.output.link(n2.arg1)
-    n3.output.link(n5.arg1)
-    n4.output.link(n5.arg2)
-    n5.output.link(n2.arg2)
+    n1.out1.link(n3.arg1)
+    n1.out2.link(n4.arg1)
+
+    n2.out1.link(n3.arg2)
+    n2.out2.link(n4.arg2)
+
+    n3.out1.link(n5.arg1)
+    n3.out2.link(n5.arg2)
+
+    # n4.out1.link(n5.arg1)
+    # n4.out2.link(n5.arg2)
 
     dg = DagGraph(nodes=[n1, n2, n3, n4, n5])
-    print(dg)
     exe = GraphExecutor(dg)
     exe.run_thread()
+
+    print(json.dumps(dg.dump(), indent=4))

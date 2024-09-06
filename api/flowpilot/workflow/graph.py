@@ -20,27 +20,32 @@ class GraphContext:
 
     def get_pin(self, pin_id: str) -> Optional[Pin]:
         """Get pin by id."""
-        pin_ref = self._pins.get(pin_id)
-        if pin_ref is None:
+        if pin_ref := self._pins.get(pin_id):
+            if pin := pin_ref():
+                return pin
+            else:
+                print(f"Pin '{pin_id}' already released.")
+                self._pins.pop(pin_id)
+        else:
             print(f"Pin '{pin_id}' does not exist.")
-            return None
-        pin = pin_ref()
-        if pin is None:
-            print(f"Pin '{pin_id}' already released.")
-            self._pins.pop(pin_id)
-        return pin
+        return None
 
     def get_node(self, node_id: str) -> Optional[NodeBase]:
         """Get node by id."""
-        node_ref = self._nodes.get(node_id)
-        if node_ref is None:
+        if node_ref := self._nodes.get(node_id):
+            if node := node_ref():
+                return node
+            else:
+                print(f"Node '{node_id}' already released.")
+                self._nodes.pop(node_id)
+        else:
             print(f"Node '{node_id}' does not exist.")
-            return None
-        node = node_ref()
-        if node is None:
-            print(f"Node '{node_id}' already released.")
-            self._nodes.pop(node_id)
-        return node
+        return None
+
+    def get_pin_node(self, pin_id: str) -> Optional[NodeBase]:
+        if pin := self.get_pin(pin_id):
+            return self.get_node(pin.owning_node)
+        return None
 
     def add_node(self, node: NodeBase) -> None:
         if node.id in self._nodes:
@@ -112,6 +117,9 @@ class DagGraph:
 
         sorted_node_ids = topological_sort(self._nodes)
         self._nodes.sort(key=lambda node: sorted_node_ids.index(node.id))
+
+    def get_node(self, node_id: str) -> Optional[NodeBase]:
+        return self.ctx.get_node(node_id)
 
     def try_create_connection(self, apin: Pin, bpin: Pin) -> None:
         if self.can_create_connection(apin, bpin):

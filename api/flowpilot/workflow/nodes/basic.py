@@ -14,6 +14,11 @@
 # limitations under the License.
 # ------------------------------------------------------------------------
 
+# todo: 改成插件形式类似llama-index-
+
+import asyncio
+
+import aiohttp
 from flowpilot.workflow.pin import Direction, Pin
 
 from .base import NodeBase
@@ -93,3 +98,12 @@ class HttpOperator(NodeBase):
 
     async def execute(self) -> None:
         pass
+
+    async def _send_request(self) -> None:
+        async with aiohttp.ClientSession() as session:
+            # tasks = [fetch(session, url) for url in urls]
+            tasks = []
+            responses = await asyncio.gather(*tasks)
+
+            for response in responses:
+                print(response)

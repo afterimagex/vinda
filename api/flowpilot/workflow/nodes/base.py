@@ -16,13 +16,13 @@
 
 import copy
 import json
+import traceback
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, Set, TypeVar
 from uuid import uuid4
 
 from flowpilot.workflow.pin import Direction, Pin
-from pydantic import BaseModel
 from tabulate import tabulate
 
 if TYPE_CHECKING:
@@ -76,16 +76,22 @@ class NodeBase(ABC):
     async def execute(self) -> None:
         pass
 
-    async def execute_internal(self):
+    async def inner_execute(self):
         self.status = NodeStatus.Running
         try:
             await self.execute()
         except Exception:
             self.status = NodeStatus.Failed
+            traceback.print_exc()
             return
         self.status = NodeStatus.Finished
         for pin in self._pins.values():
-
+            if pin.direction != Direction.OUTPUT:
+                continue
+            for pin_id in pin.links:
+                if linked_pin := self.ctx.get_pin(pin_id):
+                    if linked_pin.direction == Direction.INPUT:
+                        linked_pin.value = pin.value
 
     @property
     def pins(self) -> Iterator[Pin]:
@@ -240,9 +246,8 @@ class NodeBase(ABC):
         deps_node = set()
         for pin in self._pins.values():
             if pin.direction == Direction.INPUT:
-                for pin_id in pin.links:
-                    pin = self.ctx.get_pin(pin_id)
-                    deps_node.add(self.ctx.get_node(pin.owning_node))
+                if node := pin.get_input_node(self.ctx):
+                    deps_node.add(node)
         return deps_node
 
 
