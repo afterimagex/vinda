@@ -1,3 +1,4 @@
+import copy
 import weakref
 from typing import Dict, Iterable, List, Optional, Set, Union
 from uuid import uuid4
@@ -13,8 +14,8 @@ class GraphContext:
         self._nodes: Dict[str, weakref.ReferenceType[NodeBase]] = {}
 
     @property
-    def nodes(self) -> Dict[str, weakref.ReferenceType[NodeBase]]:
-        return self._nodes
+    def nodes(self) -> Iterable[NodeBase]:
+        return iter(self._nodes.values())
 
     def get_pin(self, pin_id: str) -> Optional[Pin]:
         """Get pin by id."""
@@ -59,8 +60,7 @@ class Graph:
     id: str
     ctx: GraphContext
     name: Optional[str]
-    _sorted_node_names: List[str]
-    _current_graph: Optional["Graph"] = None
+    _nodes: List[NodeBase]
 
     def __init__(
         self,
@@ -70,23 +70,24 @@ class Graph:
         self.id = str(uuid4())
         self.ctx = GraphContext()
         self.name = name
-        self._sorted_node_ids: List[str] = []
+        self._nodes = []
         self.add_nodes(nodes)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"
 
     def __enter__(self) -> "Graph":
-        self._previous_graph = Graph._current_graph
-        Graph._current_graph = self
+        self._previous_graph = current_graph
+        current_graph = self
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        Graph._current_graph = self._previous_graph
+        current_graph = self._previous_graph
 
-    @classmethod
-    def get_current_graph(cls) -> Optional["Graph"]:
-        return cls._current_graph
+    def _add_node(self, node: NodeBase) -> None:
+        self.ctx.add_node(node)
+        node.owning_graph = self.id
+        self._nodes.append(node)
 
     def add_nodes(self, nodes: Union[NodeBase, Iterable[NodeBase]]) -> None:
         if nodes is None:
@@ -96,12 +97,10 @@ class Graph:
             nodes = [nodes]
 
         for node in nodes:
-            node.owning_graph = self.id
-            self.ctx.add_node(node)
+            self._add_node(node)
 
-        self._sorted_node_ids = topological_sort(
-            [n for node in self.ctx.nodes.values() if (n := node())]
-        )
+        sorted_node_ids = topological_sort(self._nodes)
+        self._nodes.sort(key=lambda node: sorted_node_ids.index(node.id))
 
     def try_create_connection(self, apin: Pin, bpin: Pin) -> None:
         if self.can_create_connection(apin, bpin):
@@ -112,7 +111,25 @@ class Graph:
 
     @property
     def sorted_node_names(self) -> List[str]:
-        return [self.ctx.get_node(node_id).name for node_id in self._sorted_node_ids]
+        return [node.name for node in self._nodes]
+
+    def dump(self) -> dict:
+        state = copy.deepcopy(self.__dict__)
+        state["_nodes"] = [node.dump() for node in state["_nodes"]]
+        state.pop("ctx")
+        return state
+
+    def load(self, state: dict) -> None:
+        state = copy.deepcopy(state)
+        for key in state.keys():
+            if key == "_nodes":
+                self._nodes.clear()
+                # todo:factory to load nodes
+                nodes = [NodeBase().load(node_state) for node_state in state[key]]
+                self.add_nodes(nodes)
+            else:
+                super().__setattr__(key, state[key])
+        return self
 
 
 if __name__ == "__main__":
@@ -130,13 +147,22 @@ if __name__ == "__main__":
             self.input = Pin()
             self.output = Pin(direction=Direction.OUTPUT)
 
-    with Graph("test") as g:
-        n1 = MyNode()
-        n2 = MyNode2()
-        n1.input.link(n2.output)
+    n1 = MyNode()
+    n2 = MyNode2()
+    n1.input.link(n2.output)
 
-        print(g)
-        print(g.sorted_node_names)
+    g = Graph("test", [n1, n2])
+
+    print(g)
+    print(g.sorted_node_names)
+
+    print("==> dump")
+    data = g.dump()
+    print(data)
+
+    print("==> load")
+    g = g.load(data)
+    print(g)
 
     # def _validate_input_bindings(self) -> bool:
     #     # for node in self._nodes.values():

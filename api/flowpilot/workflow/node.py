@@ -101,12 +101,7 @@ class NodeBase(ABC):
         super().__setattr__("owning_graph", None)
         super().__setattr__("_pins", {})
 
-        from flowpilot.workflow.graph import Graph
-
         # Automatically add this node to the current graph if it exists
-        current_graph = Graph.get_current_graph()
-        if current_graph:
-            current_graph.add_nodes(self)
 
     forward: Callable[..., Any] = _forward_unimplemented
 
