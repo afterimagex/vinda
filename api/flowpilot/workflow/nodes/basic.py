@@ -1,76 +1,95 @@
-import asyncio
+# ------------------------------------------------------------------------
+# Copyright (c) 2017-present, Pvening. All Rights Reserved.
+#
+# Licensed under the BSD 2-Clause License,
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://opensource.org/licenses/BSD-2-Clause
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ------------------------------------------------------------------------
 
-from flowpilot.workflow.node import GNode
-from flowpilot.workflow.nodes.factory import UNODE
-from flowpilot.workflow.pin import EDirection, FPin, FPinType
+from flowpilot.workflow.pin import Direction, Pin
+
+from .base import NodeBase
+from .factory import UNODE
 
 
 @UNODE()
-class StartOperator(GNode):
-
-    def _input_bindings(self):
-        pass
+class StartAction(NodeBase):
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name)
+        self.output = Pin(direction=Direction.OUTPUT)
 
     async def execute(self) -> None:
-        inp = input("Please enter something: ")
-        self.pins["output"].value = inp
-        print(f'{self.name}: Input({inp}), Output({self.pins["output"].value})')
+        pass
+
+    #     inp = input("Please enter something: ")
+    #     self.pins["output"].value = inp
+    # print(f'{self.name}: Input({inp}), Output({self.pins["output"].value})')
 
 
 @UNODE()
-class EndOperator(GNode):
-    def _input_bindings(self):
-        self.add_pin(
-            FPin(
-                name="merge",
-                direction=EDirection.INPUT,
-            )
-        )
+class EndAction(NodeBase):
+
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name)
+        self.input = Pin()
 
     async def execute(self):
-        arg1 = self.pins["merge"].value
-        self.pins["output"].value = "end"
-        print(f'{self.name}: Input({arg1}), Output({self.pins["output"].value})')
+        pass
+
+    #     arg1 = self.pins["merge"].value
+    #     self.pins["output"].value = "end"
+    #     print(f'{self.name}: Input({arg1}), Output({self.pins["output"].value})')
 
 
 @UNODE()
-class PythonOperator(GNode):
+class PythonAction(NodeBase):
 
-    def _input_bindings(self):
-        self.add_pin(
-            FPin(
-                name="arg1",
-                direction=EDirection.INPUT,
-            )
-        )
-        self.add_pin(
-            FPin(
-                name="arg2",
-                direction=EDirection.INPUT,
-            )
-        )
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name)
+        self.arg1 = Pin()
+        self.arg2 = Pin()
+        self.output = Pin(direction=Direction.OUTPUT)
 
     async def execute(self):
-        arg1 = self.pins["arg1"].value
-        arg2 = self.pins["arg2"].value
-        self.pins["output"].value = self.name
-        await asyncio.sleep(1)
-        print(f'{self.name}: Input({arg1},{arg2}), Output({self.pins["output"].value})')
+        pass
+
+    #     arg1 = self.pins["arg1"].value
+    #     arg2 = self.pins["arg2"].value
+    #     self.pins["output"].value = self.name
+    #     await asyncio.sleep(1)
+    #     print(f'{self.name}: Input({arg1},{arg2}), Output({self.pins["output"].value})')
 
 
 @UNODE()
-class BashOperator(GNode):
-
-    def _input_bindings(self):
-        self.add_pin(
-            FPin(
-                name="arg1",
-                direction=EDirection.INPUT,
-            )
-        )
+class BashAction(NodeBase):
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name)
+        self.args = Pin()
+        self.output = Pin(direction=Direction.OUTPUT)
 
     async def execute(self):
-        arg1 = self.pins["arg1"].value
-        self.pins["output"].value = self.name
-        await asyncio.sleep(1)
-        print(f'{self.name}: Input({arg1}), Output({self.pins["output"].value})')
+        pass
+
+    #     arg1 = self.pins["arg1"].value
+    #     self.pins["output"].value = self.name
+    #     await asyncio.sleep(1)
+    #     print(f'{self.name}: Input({arg1}), Output({self.pins["output"].value})')
+
+
+@UNODE()
+class HttpOperator(NodeBase):
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name)
+        self.args = Pin()
+        self.output = Pin(direction=Direction.OUTPUT)
+
+    async def execute(self) -> None:
+        pass

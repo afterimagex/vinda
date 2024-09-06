@@ -16,6 +16,7 @@ class Pin:
     name: Optional[str]
     direction: Direction
     links: Set[str]
+    value: Optional[str]
     owning_node: Optional[str]
     _version: int = 1
 
@@ -23,13 +24,13 @@ class Pin:
         self,
         name: Optional[str] = None,
         direction: Direction = Direction.INPUT,
-        owning_node: Optional[str] = None,
     ) -> None:
         super().__setattr__("id", str(uuid4()))
         super().__setattr__("name", name)
         super().__setattr__("direction", direction)
         super().__setattr__("links", set())
-        super().__setattr__("owning_node", owning_node)
+        super().__setattr__("value", None)
+        super().__setattr__("owning_node", None)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"
@@ -50,6 +51,7 @@ class Pin:
 
     def dump(self):
         state = copy.deepcopy(self.__dict__)
+        state.pop("owning_node")
         state["links"] = list(state["links"])
         state["direction"] = self.direction.value
         return state

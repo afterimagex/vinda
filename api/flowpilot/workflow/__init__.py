@@ -7,7 +7,7 @@ Details:
 The module includes a Direction enum, a Pin class, and a MyNode class.
 """
 
-from .node import NodeBase
+from .nodes import NodeBase
 from .pin import Direction, Pin
 
 __all__ = [k for k in globals().keys() if not k.startswith("_")]

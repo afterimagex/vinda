@@ -1,15 +1,22 @@
-"""
-Module Summary:
-This module provides a simple example to demonstrate how to
-add a module-level docstring in the style commonly used in Apache projects.
-
-Details:
-The module includes a Direction enum, a Pin class, and a MyNode class.
-"""
+# ------------------------------------------------------------------------
+# Copyright (c) 2017-present, Pvening. All Rights Reserved.
+#
+# Licensed under the BSD 2-Clause License,
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://opensource.org/licenses/BSD-2-Clause
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ------------------------------------------------------------------------
 
 import copy
 import json
-from abc import ABC
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, Set, TypeVar
 from uuid import uuid4
@@ -19,7 +26,6 @@ from pydantic import BaseModel
 from tabulate import tabulate
 
 if TYPE_CHECKING:
-
     from flowpilot.workflow.graph import GraphContext
 
 T = TypeVar("T", bound="NodeBase")
@@ -36,22 +42,6 @@ class NodeStatus(Enum):
     Unknown = 8
 
 
-# class TestField:
-#     pass
-
-
-# class NodeSchema(BaseModel):
-#     name: str = ""
-#     # pins: Set["PinSchema"] = Field(default_factory=set)
-#     owning_graph: Optional[str] = None
-#     status: NodeStatus = NodeStatus.Initial
-#     position: Tuple[float, float] = (0.0, 0.0)
-#     description: str = ""
-#     id: str = Field(default_factory=lambda: str(uuid4()))
-#     _version: int = 1
-# fie: TestField = None
-
-
 class FNodeState(BaseModel):
     pass
 
@@ -62,25 +52,6 @@ class StateMachine:
 
 # class pin.Container:
 #     pass
-
-
-# Trick mypy into not applying contravariance rules to inputs by defining
-# forward as a value, rather than a function.  See also
-# https://github.com/python/mypy/issues/8795
-def _forward_unimplemented(self, *inputs: Any) -> None:
-    r"""Define the computation performed at every call.
-
-    Should be overridden by all subclasses.
-
-    .. note::
-        Although the recipe for forward pass needs to be defined within
-        this function, one should call the :class:`Module` instance afterwards
-        instead of this since the former takes care of running the
-        registered hooks while the latter silently ignores them.
-    """
-    raise NotImplementedError(
-        f'Node [{type(self).__name__}] is missing the required "forward" function'
-    )
 
 
 class NodeBase(ABC):
@@ -103,7 +74,12 @@ class NodeBase(ABC):
 
         # Automatically add this node to the current graph if it exists
 
-    forward: Callable[..., Any] = _forward_unimplemented
+    @abstractmethod
+    async def execute(self, *args, **kwargs) -> None:
+        pass
+
+    async def execute_internal(self):
+        pass
 
     @property
     def pins(self) -> Iterator[Pin]:
@@ -222,17 +198,20 @@ class NodeBase(ABC):
 
     def dump(self) -> dict:
         state = copy.deepcopy(self.__dict__)
+        state["class"] = self.__class__.__name__
+        state["pins"] = {k: v.dump() for k, v in state["_pins"].items()}
+        state.pop("owning_graph")
+        state.pop("_pins")
         state.pop("ctx")
-        for pin_name in state["_pins"].keys():
-            state["_pins"][pin_name] = self._pins[pin_name].dump()
         return state
 
     def load(self, state: dict) -> T:
         state = copy.deepcopy(state)
+        assert self.__class__.__name__ == state["class"]
         for key in state.keys():
-            if key == "_pins":
+            if key == "pins":
                 for pin_name in state[key].keys():
-                    self._pins[pin_name].load(state["_pins"][pin_name])
+                    setattr(self, pin_name, Pin().load(state["pins"][pin_name]))
             else:
                 super().__setattr__(key, state[key])
         return self
@@ -246,7 +225,7 @@ class NodeBase(ABC):
         cls.load(json.loads(state))
         return cls
 
-    def get_dependencies(self) -> Set[T]:
+    def get_dependencies(self) -> Set["NodeBase"]:
         if getattr(self, "ctx") is None:
             raise RuntimeError("Node must be created with a context.")
         deps_node = set()
@@ -272,17 +251,14 @@ if __name__ == "__main__":
             self.inp3 = Pin()
             self.output = Pin(direction=Direction.OUTPUT)
 
-    class MyNode2(MyNode):
-        def __init__(self, name: Optional[str] = None) -> None:
-            super().__init__(name)
-            self.input = Pin()
-            self.output = Pin(direction=Direction.OUTPUT)
+        async def execute(self, *args, **kwargs) -> None:
+            pass
 
     node = MyNode(name="MyNode")
 
     print("==> dump")
     data = node.dump()
-    print(data)
+    print(json.dumps(data, indent=4))
 
     print("==> load")
     data["name"] = "loaded"
@@ -291,14 +267,14 @@ if __name__ == "__main__":
 
     print("==> dumps")
     data = node.dumps()
-    print(data)
+    print(json.dumps(json.loads(data), indent=4))
 
     print("==> loads")
     node = MyNode.loads(data)
     print(node)
 
     print("==> MyNode2")
-    node2 = MyNode2(name="MyNode2")
+    node2 = MyNode(name="MyNode2")
     node2.input.link(node.output)
 
     # print(node2.get_dependencies())

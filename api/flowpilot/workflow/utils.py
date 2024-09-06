@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from weakref import ReferenceType
 
-from flowpilot.workflow.node import NodeBase
+from flowpilot.workflow.nodes import NodeBase
 
 
 def get_reverse_dependencies(nodes: Iterable[NodeBase]) -> Dict[str, List[str]]:

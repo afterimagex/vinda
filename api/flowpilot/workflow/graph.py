@@ -1,9 +1,10 @@
 import copy
+import json
 import weakref
-from typing import Dict, Iterable, List, Optional, Set, Union
+from typing import Dict, Iterable, List, Optional, Union
 from uuid import uuid4
 
-from flowpilot.workflow.node import NodeBase
+from flowpilot.workflow.nodes import NodeBase, new_node
 from flowpilot.workflow.pin import Pin
 from flowpilot.workflow.utils import topological_sort
 
@@ -54,8 +55,12 @@ class GraphContext:
             raise ValueError(f"Pin '{pin.id}' already exists.")
         self._pins[pin.id] = weakref.ref(pin)
 
+    def clear(self):
+        self._pins.clear()
+        self._nodes.clear()
 
-class Graph:
+
+class DagGraph:
 
     id: str
     ctx: GraphContext
@@ -69,20 +74,26 @@ class Graph:
     ) -> None:
         self.id = str(uuid4())
         self.ctx = GraphContext()
-        self.name = name
+        self.name = f"{self.__class__.__name__}_{id(self)}" if name is None else name
         self._nodes = []
         self.add_nodes(nodes)
+
+    @property
+    def nodes(self) -> Iterable[NodeBase]:
+        return self._nodes
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"
 
-    def __enter__(self) -> "Graph":
-        self._previous_graph = current_graph
-        current_graph = self
-        return self
+    def __enter__(self) -> "DagGraph":
+        pass
+        # self._previous_graph = current_graph
+        # current_graph = self
+        # return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        current_graph = self._previous_graph
+        pass
+        # current_graph = self._previous_graph
 
     def _add_node(self, node: NodeBase) -> None:
         self.ctx.add_node(node)
@@ -113,56 +124,123 @@ class Graph:
     def sorted_node_names(self) -> List[str]:
         return [node.name for node in self._nodes]
 
+    def clear(self):
+        self.ctx.clear()
+        self._nodes.clear()
+
     def dump(self) -> dict:
         state = copy.deepcopy(self.__dict__)
-        state["_nodes"] = [node.dump() for node in state["_nodes"]]
+        state["nodes"] = [node.dump() for node in state["_nodes"]]
+        state.pop("_nodes")
         state.pop("ctx")
         return state
 
     def load(self, state: dict) -> None:
         state = copy.deepcopy(state)
         for key in state.keys():
-            if key == "_nodes":
-                self._nodes.clear()
-                # todo:factory to load nodes
-                nodes = [NodeBase().load(node_state) for node_state in state[key]]
+            if key == "nodes":
+                self.clear()
+                nodes = [
+                    new_node(node_state["class"]).load(node_state)
+                    for node_state in state[key]
+                ]
                 self.add_nodes(nodes)
             else:
                 super().__setattr__(key, state[key])
         return self
 
+    def dumps(self) -> str:
+        return json.dumps(self.dump())
+
+    @classmethod
+    def loads(self, state: str) -> "DagGraph":
+        cls = self()
+        cls.load(json.loads(state))
+        return cls
+
+    def plot(self, filename: str = "dag_graph.png"):
+        import matplotlib.pyplot as plt
+        import networkx as nx
+
+        G = nx.DiGraph()
+        edges = []
+        for node in self._nodes:
+            G.add_node(node.id, label=node.name)
+            for deps_node in node.get_dependencies():
+                edges.append((deps_node.id, node.id))
+        G.add_edges_from(edges)
+
+        pos = nx.planar_layout(G)
+        labels = nx.get_node_attributes(G, "label")
+
+        plt.figure(figsize=(10, 7))
+        nx.draw(
+            G,
+            pos,
+            labels=labels,
+            with_labels=True,
+            node_size=3000,
+            node_color="skyblue",
+            font_size=16,
+            font_color="black",
+            font_weight="bold",
+            arrows=True,
+        )
+        plt.title("DAG Graph")
+        plt.savefig(filename, format="png")
+        plt.show()
+
 
 if __name__ == "__main__":
+
+    from flowpilot.workflow.nodes import UNODE
     from flowpilot.workflow.pin import Direction
 
+    @UNODE()
     class MyNode(NodeBase):
         def __init__(self, name: Optional[str] = None) -> None:
             super().__init__(name)
-            self.input = Pin()
+            self.arg1 = Pin("arg1")
+            self.arg2 = Pin("arg2")
             self.output = Pin(direction=Direction.OUTPUT)
 
-    class MyNode2(MyNode):
-        def __init__(self, name: Optional[str] = None) -> None:
-            super().__init__(name)
-            self.input = Pin()
-            self.output = Pin(direction=Direction.OUTPUT)
+        async def execute(self, *args, **kwargs) -> None:
+            pass
 
-    n1 = MyNode()
-    n2 = MyNode2()
-    n1.input.link(n2.output)
+    n1 = MyNode("n1")
+    n2 = MyNode("n2")
+    n3 = MyNode("n3")
+    n4 = MyNode("n4")
+    n5 = MyNode("n5")
 
-    g = Graph("test", [n1, n2])
+    n1.output.link(n3.arg1)
+    n3.output.link(n4.arg1)
+    n4.output.link(n2.arg1)
+    n3.output.link(n5.arg1)
+    n4.output.link(n5.arg2)
+    n5.output.link(n2.arg2)
 
-    print(g)
-    print(g.sorted_node_names)
+    dg = DagGraph(nodes=[n1, n2, n3, n4, n5])
+
+    print(dg)
+    print(dg.sorted_node_names)
+    dg.plot()
 
     print("==> dump")
-    data = g.dump()
-    print(data)
+    data = dg.dump()
+    print(json.dumps(data, indent=4))
 
     print("==> load")
-    g = g.load(data)
-    print(g)
+    dg = dg.load(data)
+    print(dg)
+
+    print("==> dumps")
+    data = dg.dumps()
+    print(json.dumps(json.loads(data), indent=4))
+
+    print("==> loads")
+    node = DagGraph.loads(data)
+    print(node)
 
     # def _validate_input_bindings(self) -> bool:
     #     # for node in self._nodes.values():
