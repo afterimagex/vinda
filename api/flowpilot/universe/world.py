@@ -37,15 +37,18 @@ class UWorld(UObject, IEventableMixin):
     在Unreal Engine中，游戏世界是动态的，可以包含各种交互元素和逻辑。
     """
 
+    has_begun_play: bool
+
     def __init__(
         self,
     ) -> None:
         super().__init__()
-        self.tickable = True
         self.timer = WorldTimer()
         self._ctx: FWorldContext = None
         self._coordinator = None
         self._game_mode = UGameMode()
+
+        self._objects = {}
 
     def init(self) -> None:
         pass
@@ -57,6 +60,13 @@ class UWorld(UObject, IEventableMixin):
         """"""
         self._ctx = world_context
         self._ctx.world = weakref.ref(self)
+
+    def _module_call(self, method_name, *args, **kwargs):
+        tasks = [
+            getattr(child, method_name, self._noop)(*args, **kwargs)
+            for _, child in self.modules()
+        ]
+        await asyncio.gather(*tasks)
 
     def setup(self):
         pass

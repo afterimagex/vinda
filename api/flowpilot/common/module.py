@@ -470,8 +470,25 @@ class Module(ABC):
 
 if __name__ == "__main__":
 
-    o1 = Module()
-    print(o1)
+    class DefaultModule(Module):
+        def __init__(self):
+            super().__init__()
+
+    class MyModule(Module):
+        def __init__(self):
+            super().__init__()
+            self.a1 = DefaultModule()
+
+    class MyModule2(Module):
+        def __init__(self):
+            super().__init__()
+            self.b1 = MyModule()
+
+    o1 = MyModule2()
+    # print(o1)
+
+    for m in o1.modules():
+        print(m)
     # print(o1)
     # o2 = Test()
     # o1.add_module("o2", o2)

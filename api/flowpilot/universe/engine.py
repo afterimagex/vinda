@@ -9,15 +9,7 @@ from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
-from flowpilot.universe import (
-    FWorldContext,
-    ITickableObject,
-    UObject,
-    USimInstance,
-    UTimer,
-    UWorld,
-    new_uclass,
-)
+from flowpilot.universe import FWorldContext, USimInstance, UTimer, UWorld, new_uclass
 
 
 class UEngine:
@@ -36,24 +28,20 @@ class UEngine:
         self._tick_event = threading.Event()
         self._timer = UTimer(self._tick_event, interval=timer_interval)
         self._worlds: List[UWorld] = []
-        self._context: FWorldContext = None
+        self._context = FWorldContext()
         self._sim_instance: USimInstance = None
-
-    def _preinit(self) -> None:
-        """"""
-        pass
-
-    def _init(self) -> None:
-        if self._sim_instance is None:
-            self._sim_instance = new_uclass("USimInstance", "DefaultSimInstance")
-            self._sim_instance.init()
-        self._load_world()
-        for world in self._worlds:
-            world.init()
 
     def _create_default_object(self) -> None:
         """"""
+        if self._sim_instance is None:
+            self._sim_instance = new_uclass("USimInstance", "DefaultSimInstance")
+
+    def _init(self) -> None:
         self._context = FWorldContext()
+        self._sim_instance.init()
+        self._load_world()
+        for world in self._worlds:
+            world.init()
 
     def _load_world(self) -> None:
         """"""
@@ -83,7 +71,6 @@ class UEngine:
 
     async def loop(self) -> None:
         """loop"""
-        self._preinit()
         self._init()
         self._create_default_object()
         self._postinit()
@@ -118,3 +105,8 @@ class UEngine:
         thread = threading.Thread(target=lambda: asyncio.run(self.loop()))
         thread.start()
         thread.join()
+
+
+if __name__ == "__main__":
+    engine = UEngine()
+    engine.run_thread()

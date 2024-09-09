@@ -23,16 +23,8 @@ class UObject(Module):
         pass
 
 
-class IEventableMixin(ABC):
-    """IEventableObject"""
-
-    tickable: bool
-    has_begun_play: bool
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.tickable = True
-        self.has_begun_play = False
+class ChildMethodInvokerMixin(ABC):
+    """LifecycleMixin"""
 
     async def _call_children(self: UObject, method_name: str, *args, **kwargs):
         """Helper to gather async calls to children methods"""
@@ -53,20 +45,17 @@ class IEventableMixin(ABC):
 
     async def begin_play(self):
         """on_begin_play"""
-        self.has_begun_play = True
         await self._call_children("begin_play")
 
     async def after_play(self):
         """on_after_play"""
-        self.has_begun_play = False
         await self._call_children("after_play")
 
     async def begin_tick(self):
         await self._call_children("begin_tick")
 
     async def tick(self, delta_time: float, event_type=None):
-        if self.tickable:
-            await self._call_children("tick", delta_time)
+        await self._call_children("tick", delta_time)
 
     async def after_tick(self):
         await self._call_children("after_tick")
@@ -78,6 +67,12 @@ class IEventableMixin(ABC):
     async def finally_destroy(self):
         """销毁前最后一个回调"""
         await self._call_children("finally_destroy")
+
+
+class World(UObject, ChildMethodInvokerMixin):
+    async def setup(self):
+        super().setup()
+        print("World setup")
 
 
 if __name__ == "__main__":
