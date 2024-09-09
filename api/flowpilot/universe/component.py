@@ -40,5 +40,5 @@ class UActorComponent(UObject, IEventableMixin):
         if self.bCanEverTick:
             self.tick(delta_time)
 
-    def tick(self, delta_time):
-        print(f"Ticking {self} with delta_time {delta_time}")
+    # def tick(self, delta_time):
+    #     print(f"Ticking {self} with delta_time {delta_time}")

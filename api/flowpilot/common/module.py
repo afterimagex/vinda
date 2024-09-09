@@ -133,7 +133,7 @@ class Module(ABC):
                 accessed from this module using the given name
             child (module): child module to be added to the module.
         """
-        if not isinstance(module, module):
+        if not isinstance(module, Module):
             raise TypeError(f"{module.__class__.__name__} is not a module subclass")
         elif not isinstance(name, str):
             raise TypeError(f"module name should be a string. Got {name}")

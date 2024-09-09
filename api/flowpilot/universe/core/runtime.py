@@ -1,12 +1,18 @@
 import weakref
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from flowpilot.universe import UCLASS, FWorldContext, ITickableObject, UWorld
+from .factory import UCLASS, UClass
+
+if TYPE_CHECKING:
+    from .world import FWorldContext
+
+__all__ = ["URuntime"]
 
 
-@UCLASS(category="SimInstance")
-class USimInstance(ITickableObject):
+@UCLASS(category="Runtime")
+class URuntime(UClass):
     """
+    physics simulation runtime
     USimInstance
     UGameInstance 是游戏实例的类，它代表了游戏的一个特定实例。
     每个游戏实例都可以有自己的配置、数据等，这些在游戏的多个关卡或会话之间保持不变。
@@ -14,25 +20,27 @@ class USimInstance(ITickableObject):
     此外，UGameInstance 还提供了在游戏开始时和结束时执行代码的机会，以及处理游戏会话的保存和加载。
     """
 
-    def __init__(self, name: Optional[str] = None) -> None:
+    ctx: "FWorldContext"
+
+    def __init__(self) -> None:
         """"""
-        super().__init__(name)
-        self._ctx: FWorldContext = None
+        self.ctx: "FWorldContext" = None
 
     def attach(
         self,
-        world_context: FWorldContext,
+        ctx: "FWorldContext",
     ) -> None:
         """"""
-        self._ctx = world_context
-        self._ctx.sim_instance = weakref.ref(self)
+        self.ctx = ctx
+        self.ctx.runtime = weakref.ref(self)
 
     def init(self):
         # self.init_subsystems()
         pass
 
-    def get_world(self) -> UWorld:
-        return self._ctx.world()
+    def tick(self, delta_time: float):
+        pass
+        # print(f"{self.__class__.__name__}tick", delta_time)
 
     def shutdown(self):
         pass
@@ -41,3 +49,8 @@ class USimInstance(ITickableObject):
     async def start(self, delta_time: float) -> None:
         """"""
         pass
+
+
+@UCLASS(category="Runtime")
+class UDefaultRuntime(URuntime):
+    pass
