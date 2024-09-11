@@ -93,6 +93,11 @@ class NodeBase(ABC):
                     if linked_pin.direction == Direction.INPUT:
                         linked_pin.value = pin.value
 
+    def reset(self):
+        super().__setattr__("status", NodeStatus.Initial)
+        for pin in self._pins.values():
+            pin.value = None
+
     @property
     def pins(self) -> Iterator[Pin]:
         return iter(self._pins.values())

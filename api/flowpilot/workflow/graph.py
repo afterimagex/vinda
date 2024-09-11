@@ -87,6 +87,10 @@ class DagGraph:
     def nodes(self) -> Iterable[NodeBase]:
         return self._nodes
 
+    def reset(self):
+        for node in self._nodes:
+            node.reset()
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"
 
@@ -245,6 +249,9 @@ if __name__ == "__main__":
     print("==> dumps")
     data = dg.dumps()
     print(json.dumps(json.loads(data), indent=4))
+
+    with open("graph.json", "w") as f:
+        f.write(data)
 
     print("==> loads")
     node = DagGraph.loads(data)

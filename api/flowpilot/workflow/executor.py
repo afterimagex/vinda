@@ -52,7 +52,7 @@ class GraphExecutor:
     def run_thread(self):
         thread = threading.Thread(target=lambda: asyncio.run(self.execute()))
         thread.start()
-        thread.join()
+        # thread.join()
 
 
 if __name__ == "__main__":

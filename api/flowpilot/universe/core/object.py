@@ -47,7 +47,7 @@ class UObject(UClass):
         if self._call_super_init:
             super().__init__(*args, **kwargs)
 
-    def add_object(self, name: str, uobject: Optional["UObject"]) -> None:
+    def add_uobject(self, name: str, uobject: Optional["UObject"]) -> None:
         r"""Add a child uobject to the current uobject.
 
         The uobject can be accessed as an attribute using the given name.

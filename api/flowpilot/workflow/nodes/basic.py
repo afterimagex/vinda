@@ -40,6 +40,18 @@ class StartAction(NodeBase):
 
 
 @UNODE()
+class BranchAction(NodeBase):
+    def __init__(self, name: str | None = None) -> None:
+        super().__init__(name)
+        self.input = Pin()
+        self.output1 = Pin(direction=Direction.OUTPUT)
+        self.output2 = Pin(direction=Direction.OUTPUT)
+
+    async def execute(self):
+        pass
+
+
+@UNODE()
 class EndAction(NodeBase):
 
     def __init__(self, name: str | None = None) -> None:

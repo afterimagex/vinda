@@ -46,8 +46,11 @@ class URuntime(UClass):
         pass
         # self.shutdown_subsystems()
 
-    async def start(self, delta_time: float) -> None:
+    def start(self, delta_time: float) -> None:
         """"""
+        pass
+
+    def get_subsystem(self, subsystem_class: type[UClass]):
         pass
 
 
