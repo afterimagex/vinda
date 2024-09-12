@@ -4,6 +4,7 @@ from flowpilot.common.utils import SingletonMeta
 class EasyTag:
     def __init__(self, tag_name: str):
         self.tag_name = tag_name
+        assert self.is_valid(), f"Invalid tag name: {tag_name}"
         EasyTagManager().add_tag(self)  # 自动添加到 EasyTagManager
 
     def __eq__(self, other):

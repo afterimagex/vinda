@@ -2,7 +2,7 @@ import weakref
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from flowpilot.common.easytag import EasyTag
 from flowpilot.common.utils import SingletonMeta
@@ -30,6 +30,9 @@ class ListenerHandle:
             self.subsystem_ref = None
             self.id = 0
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.__dict__})"
+
 
 @dataclass
 class MessageListenerData:
@@ -55,7 +58,9 @@ class MessageSubsystem(metaclass=SingletonMeta):
     def deinitialize(self):
         self._listener_map.clear()
 
-    def broadcast_message(self, channel: EasyTag, *args, **kwargs):
+    def broadcast_message(self, channel: str | EasyTag, *args, **kwargs):
+        if isinstance(channel, str):
+            channel = EasyTag(tag_name=channel)
         is_initial_tag = True
         while channel and channel.is_valid():
             if plist := self._listener_map.get(channel):
@@ -68,10 +73,12 @@ class MessageSubsystem(metaclass=SingletonMeta):
 
     def register_listener(
         self,
-        channel: EasyTag,
+        channel: str | EasyTag,
         callback: Callable,
         match_type: MatchType = MatchType.EXACT,
     ) -> ListenerHandle:
+        if isinstance(channel, str):
+            channel = EasyTag(tag_name=channel)
         if channel not in self._listener_map:
             self._listener_map[channel] = []
         entry = MessageListenerData(
@@ -85,7 +92,9 @@ class MessageSubsystem(metaclass=SingletonMeta):
         assert handle.subsystem_ref() is self
         self.unregister_listener(handle.channel, handle.id)
 
-    def unregister_listener(self, channel: EasyTag, handle_id: int):
+    def unregister_listener(self, channel: str | EasyTag, handle_id: int):
+        if isinstance(channel, str):
+            channel = EasyTag(tag_name=channel)
         if plist := self._listener_map.get(channel):
             for entry in plist:
                 if entry.handle_id == handle_id:
@@ -95,3 +104,7 @@ class MessageSubsystem(metaclass=SingletonMeta):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"
+
+
+class SocketMessageSubsystem(metaclass=SingletonMeta):
+    _listener_map: Dict[EasyTag, List[MessageListenerData]]

@@ -20,7 +20,7 @@ __all__ = [
 
 class FWorldContext:
     """
-    WorldContext
+    WorldContext WorldContextObject
     """
 
     runtime: weakref.ReferenceType["URuntime"]
@@ -79,6 +79,7 @@ class UWorld(UClass):
         actors: Optional[Union[AActor, Iterable[AActor]]] = None,
     ) -> None:
         self.ctx = FWorldContext(self)
+        self.actor_registry = {}
         self._actors: List[AActor] = []
         self.add_actors(actors)
 
@@ -101,13 +102,13 @@ class UWorld(UClass):
 
     def tick(self, delta_time: float):
         for actor in self._actors:
-            if not actor.has_begun_play:
-                actor.begin_play()
-            elif actor.tickable:
-                actor.tick(delta_time)
-            elif actor._mark_destroy:
-                actor.end_play()
-                actor.finally_destroy()
+            actor.on_begin_play()
+        for actor in self._actors:
+            actor.on_tick(delta_time)
+        for actor in self._actors:
+            actor.on_end_play("1")
+        for actor in self._actors:
+            actor.on_finally_destroy()
 
     async def atick(self):
         await asyncio.gather(

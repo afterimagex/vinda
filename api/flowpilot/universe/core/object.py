@@ -1,8 +1,9 @@
 import copy
-from typing import Any, Callable, Dict, Iterator, Optional, Set, Tuple, TypeVar
+import weakref
+from typing import Any, Callable, Dict, Iterator, Optional, Set, Tuple, Type, TypeVar
 from uuid import uuid4
 
-from .factory import UClass, new_uclass
+from .factory import UCLASS_REGISTRY, UClass, new_uclass
 
 __all__ = [
     "UObject",
@@ -25,7 +26,9 @@ class UObject(UClass):
 
     id: str
     _objs: Dict[str, Optional["UObject"]]
+    _parent_ref: Optional[weakref.ReferenceType]
     _call_super_init: bool = False
+    _disallow_child_classes: Tuple[Type]
 
     def __init__(self, *args, **kwargs) -> None:
 
@@ -43,6 +46,8 @@ class UObject(UClass):
 
         super().__setattr__("id", str(uuid4()))
         super().__setattr__("_objs", {})
+        super().__setattr__("_parent_ref", None)
+        super().__setattr__("_disallow_child_classes", tuple())
 
         if self._call_super_init:
             super().__init__(*args, **kwargs)
@@ -68,8 +73,22 @@ class UObject(UClass):
         elif name == "":
             raise KeyError('uobject name can\'t be empty string ""')
         self._objs[name] = uobject
+        uobject._parent_ref = weakref.ref(self)
 
     def __setattr__(self, name: str, value: "UObject") -> None:
+        if self._disallow_child_classes:
+            if issubclass(
+                type(value),
+                tuple(
+                    UCLASS_REGISTRY.get(uclass_name)
+                    for uclass_name in self._disallow_child_classes
+                ),
+            ):
+                raise TypeError(
+                    f"forbidden to assign an instance of type "
+                    f"'{type(value).__name__}' as a child of '{self.__class__.__name__}'"
+                )
+
         def remove_from(*dicts_or_sets):
             for d in dicts_or_sets:
                 if name in d:
@@ -85,6 +104,7 @@ class UObject(UClass):
                     "cannot assign uobject before module.__init__() call"
                 )
             remove_from(self.__dict__)
+            value._parent_ref = weakref.ref(self)
             objs[name] = value
         elif objs is not None and name in objs:
             if value is not None:
@@ -231,6 +251,10 @@ class UObject(UClass):
             if obj is not None and obj not in memo:
                 memo.add(obj)
                 yield name, obj
+
+    def parent(self) -> Optional["UObject"]:
+        r"""Returns the immediate parent of this module."""
+        return self._parent_ref()
 
     def dump(self) -> dict:
         state = copy.deepcopy(self.__dict__)
