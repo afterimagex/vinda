@@ -2,16 +2,16 @@ class AsyncWorldEventMixin:
     pass
 
 
-class WorldEventMixin:
+class EventMixin:
 
     def __init__(self):
-        self._tickable = False
+        self._tickable = True
         self._has_begun_play = False
-        self._mark_pending_kill = False
+        self._pending_kill = False
 
     def _on_children(self, method_name, *args, **kwargs):
         for obj in self.children():
-            if isinstance(obj, WorldEventMixin):
+            if isinstance(obj, EventMixin):
                 getattr(obj, method_name)(*args, **kwargs)
 
     def on_begin_play(self):
@@ -30,10 +30,10 @@ class WorldEventMixin:
         self._has_begun_play = False
         self.end_play(end_play_reason)
 
-    # def on_finally_destroy(self):
-    #     self._on_children("on_finally_destroy")
-    #     if self._mark_destroy:
-    #         self.finally_destroy()
+    def on_finally_destroy(self):
+        self._on_children("on_finally_destroy")
+        if self._pending_kill:
+            self.finally_destroy()
 
     def begin_play(self):
         """begin_play"""
@@ -47,9 +47,9 @@ class WorldEventMixin:
     def destroy(self):
         """标记待销毁"""
         self._on_children("on_destroy")
-        self._mark_pending_kill = True
+        self._pending_kill = True
 
-    # def finally_destroy(self):
-    #     """销毁前最后一个回调"""
-    #     if world := self.ctx.world():
-    #         world.final_remove_actor(self)
+    def finally_destroy(self):
+        """销毁前最后一个回调"""
+        if world := self.ctx.world():
+            world.final_remove_actor(self)

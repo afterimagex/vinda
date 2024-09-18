@@ -1,13 +1,16 @@
 import asyncio
+import atexit
 import weakref
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Union
 from uuid import uuid4
 
 from .actor import AActor
+from .event import EventMixin
 from .factory import UCLASS, UClass
+from .object import UObject
 
 # from flowpilot.universe.timer import WorldTimer
-
 
 if TYPE_CHECKING:
     from .runtime import URuntime
@@ -64,8 +67,50 @@ class FWorldContext:
 #         return self._ctx.world
 
 
+@dataclass
+class WorldSettings:
+
+    level_name: str
+
+
+@UCLASS(category="ULevel")
+class ULevel(UObject, EventMixin):
+    """ActorContainer"""
+
+    _ctx: FWorldContext
+    _actors: List[AActor]
+    world_settings: Dict[str, Any]
+
+    def __init__(
+        self,
+        actors: Optional[Union[AActor, Iterable[AActor]]] = None,
+    ) -> None:
+        self._actors: List[AActor] = []
+        atexit.register(self.destroy)
+
+    def add_actor(self, actor: AActor) -> None:
+        self._ctx.add_actor(actor)
+        self._actors.append(actor)
+
+    def add_actors(self, actors: Union[AActor, Iterable[AActor]]) -> None:
+        if not actors:
+            return
+        if isinstance(actors, AActor):
+            actors = [actors]
+        for actor in actors:
+            self.add_actor(actor)
+
+    def remove_actor(self, actor: AActor) -> None:
+        self._ctx.remove_actor(actor)
+        self._actors.remove(actor)
+
+    def destroy(self):
+        for actor in self._actors:
+            actor.destroy()
+
+
 @UCLASS(category="World")
-class UWorld(UClass):
+class UWorld(ULevel):
     """
     UWrold
     UWorld 是游戏世界的类，它包含了游戏中的所有实体（如Actor、Component等）。
@@ -79,26 +124,9 @@ class UWorld(UClass):
         actors: Optional[Union[AActor, Iterable[AActor]]] = None,
     ) -> None:
         self.ctx = FWorldContext(self)
-        self.actor_registry = {}
-        self._actors: List[AActor] = []
-        self.add_actors(actors)
 
-    def add_actor(self, actor: AActor) -> None:
-        self.ctx.add_actor(actor)
-        self._actors.append(actor)
-
-    def add_actors(self, actors: Union[AActor, Iterable[AActor]]) -> None:
-        if isinstance(actors, AActor):
-            actors = [actors]
-        for actor in actors:
-            self.add_actor(actor)
-
-    def destroy_actor(self, actor: AActor) -> None:
-        actor.destroy()
-
-    def final_remove_actor(self, actor: AActor) -> None:
-        self.ctx.remove_actor(actor)
-        self._actors.remove(actor)
+        if actors is not None:
+            self.add_actors(actors)
 
     def tick(self, delta_time: float):
         for actor in self._actors:
@@ -110,21 +138,21 @@ class UWorld(UClass):
         for actor in self._actors:
             actor.on_finally_destroy()
 
-    async def atick(self):
-        await asyncio.gather(
-            *[actor.abegin_play() for actor in self._actors if not actor.has_begun_play]
-        )
-        await asyncio.gather(
-            *[actor.atick() for actor in self._actors if actor.tickable]
-        )
-        await asyncio.gather(
-            *[
-                actor.aend_play()
-                for actor in self._actors
-                if actor.tickable
-                if actor.mark_destroy
-            ]
-        )
+    # async def atick(self):
+    #     await asyncio.gather(
+    #         *[actor.abegin_play() for actor in self._actors if not actor.has_begun_play]
+    #     )
+    #     await asyncio.gather(
+    #         *[actor.atick() for actor in self._actors if actor.tickable]
+    #     )
+    #     await asyncio.gather(
+    #         *[
+    #             actor.aend_play()
+    #             for actor in self._actors
+    #             if actor.tickable
+    #             if actor.mark_destroy
+    #         ]
+    #     )
 
     # has_begun_play: bool
 

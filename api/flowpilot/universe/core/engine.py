@@ -19,7 +19,7 @@ class UTimer(threading.Thread):
         super().__init__()
         self._tick_event = tick_event
         self._interval = interval
-        self._is_running = False
+        self._running = False
 
     def pause(self):
         pass
@@ -28,9 +28,9 @@ class UTimer(threading.Thread):
         pass
 
     def run(self):
-        self._is_running = True
+        self._running = True
         next_tick_time = time.perf_counter()
-        while self._is_running:
+        while self._running:
             current_time = time.perf_counter()
             sleep_time = next_tick_time - current_time
             if sleep_time > 0:
@@ -43,7 +43,7 @@ class UTimer(threading.Thread):
         return self._interval
 
     def stop(self):
-        self._is_running = False
+        self._running = False
         self.join()
 
 
@@ -62,7 +62,7 @@ class UEngine:
     def __init__(self, cfg: "Config", world: UWorld) -> None:
         """"""
         self._cfg = cfg
-        self._is_running = False
+        self._running = False
         self._tick_event = threading.Event()
         self._timer = UTimer(self._tick_event, interval=cfg.tick_interval)
         self._world = world
@@ -103,11 +103,11 @@ class UEngine:
         self._init()
         self._postinit()
 
-        self._is_running = True
+        self._running = True
         self._timer.start()
 
         try:
-            while self._is_running:
+            while self._running:
                 self._tick_event.wait()  # Wait for the timer thread to notify
                 self._tick_event.clear()
                 self.tick(
@@ -126,5 +126,5 @@ class UEngine:
         self.runtime_instance.shutdown()
 
     def stop(self):
-        self._is_running = False
+        self._running = False
         self._timer.stop()
