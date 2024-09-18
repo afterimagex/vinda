@@ -14,7 +14,7 @@ import requests
 from flowpilot.universe.core.engine import UEngine
 from flowpilot.universe.core.event import WorldEventMixin
 from flowpilot.universe.core.object import UObject
-from flowpilot.universe.core.world import UWorld
+from flowpilot.universe.core.world import ULevel, UWorld
 from flowpilot.utils.logger import setup_logger
 from omegaconf import OmegaConf
 
@@ -37,22 +37,13 @@ class Blackboard(object):
     pass
 
 
-class Level(UObject, WorldEventMixin):
-    def __init__(self) -> None:
-        UObject.__init__(self)
-        WorldEventMixin.__init__(self)
-        self.name = "Controller"
-        # self._blackboard = Blackboard()
-
-    def tick(self, delta_time: float):
-        print(delta_time)
-
-
 def main() -> None:
     logger = setup_logger(name="reflow")
 
     cfg = setup_cfg()
     logger.info(f"Config: {OmegaConf.to_container(cfg)}")
+
+    level = ULevel()
 
     engine = UEngine(
         cfg,
