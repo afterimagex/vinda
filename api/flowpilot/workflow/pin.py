@@ -9,6 +9,46 @@ if TYPE_CHECKING:
     from .nodes import NodeBase
 
 
+class PinCategories(Enum):
+    """PinCategories"""
+
+    Exec = 0  # 描述: 表示执行流控制的引脚，用于控制节点的执行顺序。示例: Execute, Then
+    Boolean = 1  # 描述: 布尔类型引脚，用于传递True或False值。示例: IsActive, bIsVisible
+    Integer = 2  # 描述: 整型引脚，用于传递整数值。示例: Health, Score
+    Float = 3  # 描述: 浮点型引脚，用于传递浮点数值。示例: Speed, Rotation
+    String = 4  # 描述: 字符串类型引脚，用于传递文本数据。示例: PlayerName, Description
+    Name = 5  # 描述: 名称类型引脚，用于传递名称（类似于字符串，但在UE中有特殊用途）。示例: BoneName, Tag
+    Vector = 6  # 描述: 向量类型引脚，用于传递三维向量值。示例: Location, Direction
+    Rotator = 7  # 描述: 旋转器类型引脚，用于传递三维旋转值。示例: Rotation, Orientation
+    Transform = 8  # 描述: 变换类型引脚，用于传递位置、旋转和缩放的组合。示例: Transform, TransformMatrix
+    Object = 9  # 描述: 对象类型引脚，用于传递对象引用。示例: Actor, Component, 子类别: 具体的对象类型，如Actor, StaticMeshComponent等。
+    Class = 10  # 描述: 类别类型引脚，用于传递类引用, 示例: CharacterClass, WeaponClass, 子类别: 具体的类类型。
+    Struct = 11  # 描述: 结构体类型引脚，用于传递用户定义的结构体类型。示例: Vector2D, HitResult, 子类别: 具体的结构体类型。
+    Enum = 12  # 描述: 枚举类型引脚，用于传递枚举值。示例: MovementMode, WeaponType, 子类别: 具体的枚举类型。
+
+
+class ContainerTypes(Enum):
+    """ContainerTypes"""
+
+    Null = 0  # 描述: 单一值，引脚只传递单一值。示例: int, float
+    Array = 1  # 描述: 数组，引脚可以传递多个值。示例: int[], float[]
+    Set = 2  # 描述: 集合类型，引脚传递一个集合。示例: Set<int>, Set<float>
+    Map = 3  # 描述: 映射类型，引脚传递一个键值对映射。示例: Map<int, int>, Map<float, float>, Map<int, string>
+
+
+class PinProperties(Enum):
+    """PinProperties"""
+
+    bIsReference = 0  # 是否为引用类型。
+    bIsConst = 1  # 是否为常量。
+    bIsWeakPointer = 2  # 是否为弱引用。
+    bIsUObjectWrapper = 3  # 是否为UObject包装器。
+    bSerializeAsSinglePrecisionFloat = 4  # 是否作为单精度浮点数序列化。
+    bOrphanedPin = 5  # 是否为孤立引脚。
+    bNotConnectable = 6  # 是否为不可连接的引脚。
+    bDefaultValueIsReadOnly = 7  # 默认值是否只读。
+
+
 class Direction(Enum):
     INPUT = 0
     OUTPUT = 1

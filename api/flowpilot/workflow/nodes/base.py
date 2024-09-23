@@ -50,7 +50,7 @@ class StateMachine:
 #     pass
 
 
-class NodeBase(ABC):
+class BaseNode(ABC):
 
     id: str
     ctx: Optional["GraphContext"]

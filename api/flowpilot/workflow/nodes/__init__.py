@@ -14,7 +14,7 @@
 # limitations under the License.
 # ------------------------------------------------------------------------
 
-from .base import NodeBase
+from .base import BaseNode
 from .basic import EndAction, StartAction
 from .factory import NODE_REGISTRY, UNODE, new_node
 

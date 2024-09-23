@@ -1,3 +1,6 @@
+import re
+
+
 class AsyncWorldEventMixin:
     pass
 
@@ -53,3 +56,37 @@ class EventMixin:
         """销毁前最后一个回调"""
         if world := self.ctx.world():
             world.final_remove_actor(self)
+
+
+def parse_blueprint_script(script):
+    nodes = {}
+    current_node = None
+
+    # 匹配Begin Object行
+    node_pattern = re.compile(
+        r'Begin Object Class=/Script/BlueprintGraph\.(\w+) Name="(\w+)"'
+    )
+    pin_pattern = re.compile(
+        r'CustomProperties Pin $PinId=([0-9A-F]+),PinName="(\w+)",(.*?)$'
+    )
+
+    for line in script.splitlines():
+        # 检查是否为新节点开始
+        node_match = node_pattern.match(line)
+        if node_match:
+            node_type, node_name = node_match.groups()
+            current_node = {"type": node_type, "name": node_name, "pins": []}
+            nodes[node_name] = current_node
+        elif current_node:
+            # 检查引脚信息
+            pin_match = pin_pattern.search(line)
+            if pin_match:
+                pin_id, pin_name, pin_properties = pin_match.groups()
+                pin_dict = {
+                    "id": pin_id,
+                    "name": pin_name,
+                    "properties": pin_properties,
+                }
+                current_node["pins"].append(pin_dict)
+
+    return nodes

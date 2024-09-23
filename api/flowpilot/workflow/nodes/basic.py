@@ -21,7 +21,7 @@ import asyncio
 import aiohttp
 from flowpilot.workflow.pin import Direction, Pin
 
-from .base import NodeBase
+from .base import BaseNode
 from .factory import UNODE
 
 
