@@ -22,7 +22,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, Set, TypeVar
 from uuid import uuid4
 
-from flowpilot.workflow.pin import Direction, Pin
+from flowpilot.workflow.pins import Direction, Pin
 from tabulate import tabulate
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ class StateMachine:
 #     pass
 
 
-class BaseNode(ABC):
+class NodeBase(ABC):
 
     id: str
     ctx: Optional["GraphContext"]
@@ -73,13 +73,13 @@ class BaseNode(ABC):
         # Automatically add this node to the current graph if it exists
 
     @abstractmethod
-    async def execute(self) -> None:
+    def _execute(self) -> None:
         pass
 
-    async def inner_execute(self):
+    def execute(self):
         self.status = NodeStatus.Running
         try:
-            await self.execute()
+            self._execute()
         except Exception:
             self.status = NodeStatus.Failed
             traceback.print_exc()
@@ -229,7 +229,7 @@ class BaseNode(ABC):
         for key in state.keys():
             if key == "pins":
                 for pin_name in state[key].keys():
-                    setattr(self, pin_name, Pin().load(state["pins"][pin_name]))
+                    setattr(self, pin_name, PinBase().load(state["pins"][pin_name]))
             elif key == "status":
                 state[key] = NodeStatus(state[key])
             else:

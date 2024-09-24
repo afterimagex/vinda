@@ -4,18 +4,18 @@ import weakref
 from typing import Dict, Iterable, List, Optional, Union
 from uuid import uuid4
 
-from flowpilot.workflow.nodes import BaseNode, new_node
-from flowpilot.workflow.pin import Pin
+from flowpilot.workflow.nodes import NodeBase, new_node
+from flowpilot.workflow.pins import Pin
 from flowpilot.workflow.utils import topological_sort
 
 
 class GraphContext:
     def __init__(self) -> None:
         self._pins: Dict[str, weakref.ReferenceType[Pin]] = {}
-        self._nodes: Dict[str, weakref.ReferenceType[BaseNode]] = {}
+        self._nodes: Dict[str, weakref.ReferenceType[NodeBase]] = {}
 
     @property
-    def nodes(self) -> Iterable[BaseNode]:
+    def nodes(self) -> Iterable[NodeBase]:
         return iter(self._nodes.values())
 
     def get_pin(self, pin_id: str) -> Optional[Pin]:
@@ -30,7 +30,7 @@ class GraphContext:
             print(f"Pin '{pin_id}' does not exist.")
         return None
 
-    def get_node(self, node_id: str) -> Optional[BaseNode]:
+    def get_node(self, node_id: str) -> Optional[NodeBase]:
         """Get node by id."""
         if node_ref := self._nodes.get(node_id):
             if node := node_ref():
@@ -42,12 +42,12 @@ class GraphContext:
             print(f"Node '{node_id}' does not exist.")
         return None
 
-    def get_pin_node(self, pin_id: str) -> Optional[BaseNode]:
+    def get_pin_node(self, pin_id: str) -> Optional[NodeBase]:
         if pin := self.get_pin(pin_id):
             return self.get_node(pin.owning_node)
         return None
 
-    def add_node(self, node: BaseNode) -> None:
+    def add_node(self, node: NodeBase) -> None:
         if node.id in self._nodes:
             raise ValueError(f"Node '{node.id}' already exists.")
         self._nodes[node.id] = weakref.ref(node)
@@ -65,17 +65,16 @@ class GraphContext:
         self._nodes.clear()
 
 
-class DagGraph:
-
+class NodeGraph:
     id: str
     ctx: GraphContext
     name: Optional[str]
-    _nodes: List[BaseNode]
+    _nodes: List[NodeBase]
 
     def __init__(
         self,
         name: Optional[str] = None,
-        nodes: Optional[Union[BaseNode, Iterable[BaseNode]]] = None,
+        nodes: Optional[Union[NodeBase, Iterable[NodeBase]]] = None,
     ) -> None:
         self.id = str(uuid4())
         self.ctx = GraphContext()
@@ -84,7 +83,7 @@ class DagGraph:
         self.add_nodes(nodes)
 
     @property
-    def nodes(self) -> Iterable[BaseNode]:
+    def nodes(self) -> Iterable[NodeBase]:
         return self._nodes
 
     def reset(self):
@@ -94,47 +93,23 @@ class DagGraph:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"
 
-    def __enter__(self) -> "DagGraph":
-        pass
-        # self._previous_graph = current_graph
-        # current_graph = self
-        # return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        pass
-        # current_graph = self._previous_graph
-
-    def _add_node(self, node: BaseNode) -> None:
+    def _add_node(self, node: NodeBase) -> None:
         self.ctx.add_node(node)
         node.owning_graph = self.id
         self._nodes.append(node)
 
-    def add_nodes(self, nodes: Union[BaseNode, Iterable[BaseNode]]) -> None:
+    def add_nodes(self, nodes: Union[NodeBase, Iterable[NodeBase]]) -> None:
         if nodes is None:
             return
 
-        if isinstance(nodes, BaseNode):
+        if isinstance(nodes, NodeBase):
             nodes = [nodes]
 
         for node in nodes:
             self._add_node(node)
 
-        sorted_node_ids = topological_sort(self._nodes)
-        self._nodes.sort(key=lambda node: sorted_node_ids.index(node.id))
-
-    def get_node(self, node_id: str) -> Optional[BaseNode]:
+    def get_node(self, node_id: str) -> Optional[NodeBase]:
         return self.ctx.get_node(node_id)
-
-    def try_create_connection(self, apin: Pin, bpin: Pin) -> None:
-        if self.can_create_connection(apin, bpin):
-            apin.link(bpin)
-
-    def can_create_connection(self, apin: Pin, bpin: Pin) -> bool:
-        return True
-
-    @property
-    def sorted_node_names(self) -> List[str]:
-        return [node.name for node in self._nodes]
 
     def clear(self):
         self.ctx.clear()
@@ -170,7 +145,36 @@ class DagGraph:
         cls.load(json.loads(state))
         return cls
 
-    def plot(self, filename: str = "dag_graph.png"):
+    def try_create_connection(self, apin: Pin, bpin: Pin) -> None:
+        if self.can_create_connection(apin, bpin):
+            apin.link(bpin)
+
+    def can_create_connection(self, apin: Pin, bpin: Pin) -> bool:
+        return True
+
+
+class EventGraph(NodeGraph):
+
+    def execute(self) -> None:
+        for node in self._nodes:
+            node.execute()
+
+
+class DagGraph(NodeGraph):
+
+    def sort(self) -> None:
+        sorted_node_ids = topological_sort(self._nodes)
+        self._nodes.sort(key=lambda node: sorted_node_ids.index(node.id))
+
+    def add_nodes(self, nodes: Union[NodeBase, Iterable[NodeBase]]) -> None:
+        super().add_nodes(nodes)
+        self.sort()
+
+    @property
+    def sorted_node_names(self) -> List[str]:
+        return [node.name for node in self._nodes]
+
+    def plot(self, filename: str = "daggraph.png"):
         import matplotlib.pyplot as plt
         import networkx as nx
 
@@ -206,10 +210,10 @@ class DagGraph:
 if __name__ == "__main__":
 
     from flowpilot.workflow.nodes import UNODE
-    from flowpilot.workflow.pin import Direction
+    from flowpilot.workflow.pins import Direction
 
     @UNODE()
-    class MyNode(BaseNode):
+    class MyNode(NodeBase):
         def __init__(self, name: Optional[str] = None) -> None:
             super().__init__(name)
             self.arg1 = Pin("arg1")

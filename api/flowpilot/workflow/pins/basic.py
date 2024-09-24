@@ -14,8 +14,50 @@
 # limitations under the License.
 # ------------------------------------------------------------------------
 
-from .base import NodeBase
-from .basic import *
-from .factory import NODE_REGISTRY, UNODE, new_node
+from .base import Pin
+from .factory import UPIN
 
-__all__ = [k for k in globals().keys() if not k.startswith("_")]
+
+@UPIN()
+class ExecPin(Pin):
+    pass
+
+
+@UPIN()
+class AnyPin(Pin):
+    pass
+
+
+@UPIN()
+class StringPin(Pin):
+    pass
+
+
+@UPIN()
+class IntegerPin(Pin):
+    pass
+
+
+@UPIN()
+class FloatPin(Pin):
+    pass
+
+
+@UPIN()
+class BooleanPin(Pin):
+    pass
+
+
+@UPIN()
+class ObjectPin(Pin):
+    pass
+
+
+@UPIN()
+class ListPin(Pin):
+    pass
+
+
+@UPIN()
+class DictPin(Pin):
+    pass

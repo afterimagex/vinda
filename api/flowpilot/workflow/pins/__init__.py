@@ -14,8 +14,9 @@
 # limitations under the License.
 # ------------------------------------------------------------------------
 
-from .base import NodeBase
+from .base import Direction, Pin, PinType
 from .basic import *
-from .factory import NODE_REGISTRY, UNODE, new_node
+
+# from .factory import PIN_REGISTRY, UPIN, new_pin
 
 __all__ = [k for k in globals().keys() if not k.startswith("_")]
