@@ -76,6 +76,10 @@ class NodeBase(ABC):
     def _execute(self) -> None:
         pass
 
+    @abstractmethod
+    async def _execute_async(self) -> None:
+        pass
+
     def execute(self):
         self.status = NodeStatus.Running
         try:
@@ -85,6 +89,20 @@ class NodeBase(ABC):
             traceback.print_exc()
             return
         self.status = NodeStatus.Finished
+        self.post_execute()
+
+    async def execute_async(self):
+        self.status = NodeStatus.Running
+        try:
+            await self._execute_async()
+        except Exception:
+            self.status = NodeStatus.Failed
+            traceback.print_exc()
+            return
+        self.status = NodeStatus.Finished
+        self.post_execute()
+
+    def post_execute(self):
         for pin in self._pins.values():
             if pin.direction != Direction.OUTPUT:
                 continue
