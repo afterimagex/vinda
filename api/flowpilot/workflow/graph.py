@@ -5,7 +5,7 @@ from typing import Dict, Iterable, List, Optional, Union
 from uuid import uuid4
 
 from flowpilot.workflow.nodes import NodeBase, new_node
-from flowpilot.workflow.pins import Pin
+from flowpilot.workflow.pins import Direction, ExecPin, Pin
 from flowpilot.workflow.utils import topological_sort
 
 
@@ -13,6 +13,7 @@ class GraphContext:
     def __init__(self) -> None:
         self._pins: Dict[str, weakref.ReferenceType[Pin]] = {}
         self._nodes: Dict[str, weakref.ReferenceType[NodeBase]] = {}
+        # self.
 
     @property
     def nodes(self) -> Iterable[NodeBase]:
@@ -154,10 +155,16 @@ class NodeGraph:
 
 
 class EventGraph(NodeGraph):
+    def __init__(
+        self,
+        name: str | None = None,
+        nodes: NodeBase | Iterable[NodeBase] | None = None,
+    ) -> None:
+        super().__init__(name, nodes)
+        self.begin_play = ExecPin(direction=Direction.OUTPUT)
 
     def execute(self) -> None:
-        for node in self._nodes:
-            node.execute()
+        self.begin_play.emit(self.ctx)
 
 
 class DagGraph(NodeGraph):
@@ -208,70 +215,108 @@ class DagGraph(NodeGraph):
 
 
 if __name__ == "__main__":
+    from flowpilot.workflow.nodes.basic import PyCodeNode
 
-    from flowpilot.workflow.nodes import UNODE
-    from flowpilot.workflow.pins import Direction
+    node1 = PyCodeNode(
+        "node1",
+        source="""
+def hashmd5():
+    import hashlib
+    md5_hash = hashlib.md5()
+    md5_hash.update(f"reflow_sts_{userid}_{authsk}_{timestamp}".encode("utf-8"))
+    return md5_hash.hexdigest()
+md5 = hashmd5()
+""",
+        output_fields=["md5"],
+    )
+    node1.vars.value = {
+        "userid": "123456",
+        "authsk": "123456",
+        "timestamp": "123456",
+    }
 
-    @UNODE()
-    class MyNode(NodeBase):
-        def __init__(self, name: Optional[str] = None) -> None:
-            super().__init__(name)
-            self.arg1 = Pin("arg1")
-            self.arg2 = Pin("arg2")
-            self.output = Pin(direction=Direction.OUTPUT)
+    node2 = PyCodeNode(
+        "node2",
+        source="""
+ret = md5
+""",
+    )
 
-        async def execute(self, *args, **kwargs) -> None:
-            pass
+    node1.then.link(node2.exec)
+    node1.retv.link(node2.vars)
 
-    n1 = MyNode("n1")
-    n2 = MyNode("n2")
-    n3 = MyNode("n3")
-    n4 = MyNode("n4")
-    n5 = MyNode("n5")
+    graph = EventGraph(nodes=[node1, node2])
+    graph.begin_play.link(node1.exec)
 
-    n1.output.link(n3.arg1)
-    n3.output.link(n4.arg1)
-    n4.output.link(n2.arg1)
-    n3.output.link(n5.arg1)
-    n4.output.link(n5.arg2)
-    n5.output.link(n2.arg2)
+    graph.execute()
 
-    dg = DagGraph(nodes=[n1, n2, n3, n4, n5])
+    print(node2.retv)
 
-    print(dg)
-    print(dg.sorted_node_names)
-    dg.plot()
+# if __name__ == "__main__":
 
-    print("==> dump")
-    data = dg.dump()
-    print(json.dumps(data, indent=4))
+#     from flowpilot.workflow.nodes import UNODE
+#     from flowpilot.workflow.pins import Direction
 
-    print("==> load")
-    dg = dg.load(data)
-    print(dg)
+#     @UNODE()
+#     class MyNode(NodeBase):
+#         def __init__(self, name: Optional[str] = None) -> None:
+#             super().__init__(name)
+#             self.arg1 = Pin("arg1")
+#             self.arg2 = Pin("arg2")
+#             self.output = Pin(direction=Direction.OUTPUT)
 
-    print("==> dumps")
-    data = dg.dumps()
-    print(json.dumps(json.loads(data), indent=4))
+#         async def execute(self, *args, **kwargs) -> None:
+#             pass
 
-    with open("graph.json", "w") as f:
-        f.write(data)
+#     n1 = MyNode("n1")
+#     n2 = MyNode("n2")
+#     n3 = MyNode("n3")
+#     n4 = MyNode("n4")
+#     n5 = MyNode("n5")
 
-    print("==> loads")
-    node = DagGraph.loads(data)
-    print(node)
+#     n1.output.link(n3.arg1)
+#     n3.output.link(n4.arg1)
+#     n4.output.link(n2.arg1)
+#     n3.output.link(n5.arg1)
+#     n4.output.link(n5.arg2)
+#     n5.output.link(n2.arg2)
 
-    # def _validate_input_bindings(self) -> bool:
-    #     # for node in self._nodes.values():
-    #     #     for input_binding in node._model.inputs:
-    #     #         if input_binding.id not in self._nodes:
-    #     #             raise ValueError(
-    #     #                 f"Input '{input_binding.id}' for node '{node.name}' does not exist."
-    #     #             )
-    #     pass
+#     dg = DagGraph(nodes=[n1, n2, n3, n4, n5])
 
-    # def serialize(self) -> dict:
-    #     return {node.name: node.serialize() for node in self._nodes.values()}
+#     print(dg)
+#     print(dg.sorted_node_names)
+#     dg.plot()
 
-    # def deserialize(self, data: dict) -> None:
-    #     pass
+#     print("==> dump")
+#     data = dg.dump()
+#     print(json.dumps(data, indent=4))
+
+#     print("==> load")
+#     dg = dg.load(data)
+#     print(dg)
+
+#     print("==> dumps")
+#     data = dg.dumps()
+#     print(json.dumps(json.loads(data), indent=4))
+
+#     with open("graph.json", "w") as f:
+#         f.write(data)
+
+#     print("==> loads")
+#     node = DagGraph.loads(data)
+#     print(node)
+
+#     # def _validate_input_bindings(self) -> bool:
+#     #     # for node in self._nodes.values():
+#     #     #     for input_binding in node._model.inputs:
+#     #     #         if input_binding.id not in self._nodes:
+#     #     #             raise ValueError(
+#     #     #                 f"Input '{input_binding.id}' for node '{node.name}' does not exist."
+#     #     #             )
+#     #     pass
+
+#     # def serialize(self) -> dict:
+#     #     return {node.name: node.serialize() for node in self._nodes.values()}
+
+#     # def deserialize(self, data: dict) -> None:
+#     #     pass

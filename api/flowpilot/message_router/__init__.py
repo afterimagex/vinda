@@ -14,50 +14,7 @@
 # limitations under the License.
 # ------------------------------------------------------------------------
 
-from .base import Pin
-from .factory import UPIN
+from .message_router import ListenerHandle, MatchType, MessageRouter
+from .tags import EasyTag, EasyTagContainer, EasyTagManager, EasyTagQuery
 
-
-@UPIN()
-class ExecPin(Pin):
-    pass
-
-
-@UPIN()
-class AnyPin(Pin):
-    pass
-
-
-@UPIN()
-class StringPin(Pin):
-    pass
-
-
-@UPIN()
-class IntegerPin(Pin):
-    pass
-
-
-@UPIN()
-class FloatPin(Pin):
-    pass
-
-
-@UPIN()
-class BooleanPin(Pin):
-    pass
-
-
-@UPIN()
-class ObjectPin(Pin):
-    pass
-
-
-@UPIN()
-class ListPin(Pin):
-    pass
-
-
-@UPIN()
-class DictPin(Pin):
-    pass
+__all__ = [k for k in globals().keys() if not k.startswith("_")]

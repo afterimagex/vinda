@@ -1,6 +1,6 @@
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
-from .event import WorldEventMixin
+from .event import EventMixin
 from .factory import UCLASS
 from .message import ListenerHandle, MessageSubsystem
 from .object import UObject
@@ -40,7 +40,7 @@ class UComponent(UObject):
 
 
 @UCLASS(category="Component")
-class UActorComponent(UComponent, WorldEventMixin):
+class UActorComponent(UComponent, EventMixin):
     """
     UActorComponent 是可以附加到 AActor 的组件类。
     UActorComponent 具备 BeginPlay 和 TickComponent 功能，但需要设置 PrimaryComponentTick.bCanEverTick = true; 来启用 Tick。
@@ -48,7 +48,7 @@ class UActorComponent(UComponent, WorldEventMixin):
 
     def __init__(self, name: Optional[str] = None) -> None:
         UComponent.__init__(self, name)
-        WorldEventMixin.__init__(self)
+        EventMixin.__init__(self)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"

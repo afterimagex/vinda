@@ -14,8 +14,7 @@
 # limitations under the License.
 # ------------------------------------------------------------------------
 
-from .base import Direction, Pin, PinType
-from .basic import *
+from .base import DataPin, Direction, ExecPin, Pin
 
 # from .factory import PIN_REGISTRY, UPIN, new_pin
 

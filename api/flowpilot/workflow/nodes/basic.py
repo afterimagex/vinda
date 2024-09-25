@@ -16,17 +16,17 @@
 
 # todo: 改成插件形式类似llama-index-
 
-# import asyncio
-
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional
 
-from flowpilot.workflow.nodes.base import NodeBase
+# import asyncio
+import requests
+from flowpilot.workflow.nodes.base import ExecNode, NodeBase
 from flowpilot.workflow.nodes.factory import UNODE
 
 # import aiohttp
-from flowpilot.workflow.pins import Direction, Pin
+from flowpilot.workflow.pins import DataPin, Direction, ExecPin
 
 # @UNODE()
 # class StartAction(NodeBase):
@@ -70,26 +70,24 @@ from flowpilot.workflow.pins import Direction, Pin
 
 
 # @UNODE()
-class PyCodeNode(NodeBase):
+class PyCodeNode(ExecNode):
 
     def __init__(
         self,
         name: str | None = None,
         *,
         source: str,
-        output_fields: Optional[List[str]] = None
+        output_fields: Optional[List[str]] = None,
     ) -> None:
         super().__init__(name)
-        self.exec = Pin()
-        self.then = Pin(direction=Direction.OUTPUT)
-        self.vars = Pin()
-        self.retv = Pin(direction=Direction.OUTPUT)
+        self.vars = DataPin()
+        self.retv = DataPin(direction=Direction.OUTPUT)
         self.source = source
         self.output_fields = output_fields
 
     def exec_code(self):
         namespace = {}
-        exec(self.source, deepcopy(self.vars.value), namespace)
+        exec(self.source, deepcopy(self.vars()), namespace)
         if self.output_fields is None:
             return namespace
         for key in list(namespace.keys()):
@@ -101,21 +99,30 @@ class PyCodeNode(NodeBase):
         self.retv.value = self.exec_code()
 
 
-class EventNode(NodeBase):
+class HttpReqNode(ExecNode):
+    def __init__(self, name: str | None = None):
+        super().__init__(name)
+        self.method = DataPin()
+        self.params = DataPin()
+        self.response = DataPin(direction=Direction.OUTPUT)
+
+    def _execute(self):
+        response = getattr(requests, self.method().lower())(**self.params())
+        response.raise_for_status()
+        self.response.set(response)
+
+
+class EventNode(ExecNode):
     def __init__(
         self,
         name: str | None = None,
         *,
-        source: str,
-        output_fields: Optional[List[str]] = None
+        nodes: List[NodeBase],
     ) -> None:
         super().__init__(name)
-        self.exec = Pin()
-        self.then = Pin(direction=Direction.OUTPUT)
-        self.vars = Pin()
-        self.retv = Pin(direction=Direction.OUTPUT)
-        self.source = source
-        self.output_fields = output_fields
+
+        self.vars = DataPin()
+        self.retv = DataPin(direction=Direction.OUTPUT)
 
 
 # @UNODE()

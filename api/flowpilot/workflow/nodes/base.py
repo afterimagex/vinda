@@ -22,7 +22,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Optional, Set, TypeVar
 from uuid import uuid4
 
-from flowpilot.workflow.pins import Direction, Pin
+from flowpilot.workflow.pins import DataPin, Direction, ExecPin, Pin
 from tabulate import tabulate
 
 if TYPE_CHECKING:
@@ -69,47 +69,6 @@ class NodeBase(ABC):
         super().__setattr__("status", NodeStatus.Initial)
         super().__setattr__("owning_graph", None)
         super().__setattr__("_pins", {})
-
-        # Automatically add this node to the current graph if it exists
-
-    @abstractmethod
-    def _execute(self) -> None:
-        pass
-
-    @abstractmethod
-    async def _execute_async(self) -> None:
-        pass
-
-    def execute(self):
-        self.status = NodeStatus.Running
-        try:
-            self._execute()
-        except Exception:
-            self.status = NodeStatus.Failed
-            traceback.print_exc()
-            return
-        self.status = NodeStatus.Finished
-        self.post_execute()
-
-    async def execute_async(self):
-        self.status = NodeStatus.Running
-        try:
-            await self._execute_async()
-        except Exception:
-            self.status = NodeStatus.Failed
-            traceback.print_exc()
-            return
-        self.status = NodeStatus.Finished
-        self.post_execute()
-
-    def post_execute(self):
-        for pin in self._pins.values():
-            if pin.direction != Direction.OUTPUT:
-                continue
-            for pin_id in pin.links:
-                if linked_pin := self.ctx.get_pin(pin_id):
-                    if linked_pin.direction == Direction.INPUT:
-                        linked_pin.value = pin.value
 
     def reset(self):
         super().__setattr__("status", NodeStatus.Initial)
@@ -247,7 +206,7 @@ class NodeBase(ABC):
         for key in state.keys():
             if key == "pins":
                 for pin_name in state[key].keys():
-                    setattr(self, pin_name, PinBase().load(state["pins"][pin_name]))
+                    setattr(self, pin_name, Pin().load(state["pins"][pin_name]))
             elif key == "status":
                 state[key] = NodeStatus(state[key])
             else:
@@ -273,9 +232,57 @@ class NodeBase(ABC):
                     deps_node.add(node)
         return deps_node
 
+    def transmit(self) -> None:
+        """
+        Transmit data through the node.
+        """
+        for pin in self._pins.values():
+            if not isinstance(pin, DataPin) or pin.direction != Direction.OUTPUT:
+                continue
+            for pin_id in pin.links:
+                if linked_pin := self.ctx.get_pin(pin_id):
+                    if linked_pin.direction == Direction.INPUT:
+                        linked_pin.value = pin.value
 
-class AsyncAction(NodeBase):
-    pass
+    def receive(self):
+        for pin in self._pins.values():
+            if not isinstance(pin, DataPin) or pin.direction != Direction.INPUT:
+                continue
+            for pin_id in pin.links:
+                if linked_pin := self.ctx.get_pin(pin_id):
+                    if linked_pin.direction == Direction.OUTPUT:
+                        pin.value = linked_pin.value
+
+
+class ExecNode(NodeBase):
+
+    def __init__(self, name: str | None = None):
+        super().__init__(name)
+        self.exec = ExecPin()
+        self.then = ExecPin(direction=Direction.OUTPUT)
+
+    @abstractmethod
+    def _execute(self) -> None:
+        pass
+
+    def execute(self):
+        self.status = NodeStatus.Running
+        try:
+            self._execute()
+        except Exception:
+            self.status = NodeStatus.Failed
+            traceback.print_exc()
+            return
+        self.status = NodeStatus.Finished
+        self.transmit()
+
+    def transmit(self):
+        super().transmit()
+        # 深度优先bug
+        for pin in self._pins.values():
+            if not isinstance(pin, ExecPin) or pin.direction != Direction.OUTPUT:
+                continue
+            pin.emit(self.ctx)
 
 
 if __name__ == "__main__":

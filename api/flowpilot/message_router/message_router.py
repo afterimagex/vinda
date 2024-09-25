@@ -1,11 +1,28 @@
+# ------------------------------------------------------------------------
+# Copyright (c) 2017-present, Pvening. All Rights Reserved.
+#
+# Licensed under the BSD 2-Clause License,
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://opensource.org/licenses/BSD-2-Clause
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ------------------------------------------------------------------------
+
 import weakref
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
-from flowpilot.common.easytag import EasyTag
-from flowpilot.common.utils import SingletonMeta
+from .tags import EasyTag
+
+__all__ = ["MatchType", "ListenerHandle", "MessageRouter"]
 
 
 class MatchType(Enum):
@@ -16,18 +33,18 @@ class MatchType(Enum):
 class ListenerHandle:
     id: int
 
-    def __init__(self, subsystem: "MessageSubsystem", channel: EasyTag, id: int):
+    def __init__(self, router: "MessageRouter", channel: EasyTag, id: int):
         self.id = id
         self.channel = channel
-        self.subsystem_ref = weakref.ref(subsystem)
+        self.router_ref = weakref.ref(router)
 
     def is_valid(self):
         return self.id != 0
 
     def unregister(self):
-        if subsystem := self.subsystem_ref():
-            subsystem.unregister_listener_by_handle(self)
-            self.subsystem_ref = None
+        if subsystem := self.router_ref():
+            subsystem.unregister_listener_handle(self)
+            self.router_ref = None
             self.id = 0
 
     def __repr__(self) -> str:
@@ -35,27 +52,20 @@ class ListenerHandle:
 
 
 @dataclass
-class MessageListenerData:
+class ListenerData:
     handle_id: int
     match_type: MatchType
     received_callback: Callable
 
 
-class MessageSubsystem(metaclass=SingletonMeta):
+class MessageRouter:
 
-    _listener_map: Dict[EasyTag, List[MessageListenerData]]
+    _listener_map: Dict[EasyTag, List[ListenerData]]
 
     def __init__(self) -> None:
         self._listener_map = OrderedDict()
 
-    @classmethod
-    def get(cls, ctx):
-        pass
-
-    def has_instance(self, ctx) -> bool:
-        return True
-
-    def deinitialize(self):
+    def clear(self):
         self._listener_map.clear()
 
     def broadcast_message(self, channel: str | EasyTag, *args, **kwargs):
@@ -81,15 +91,13 @@ class MessageSubsystem(metaclass=SingletonMeta):
             channel = EasyTag(tag_name=channel)
         if channel not in self._listener_map:
             self._listener_map[channel] = []
-        entry = MessageListenerData(
-            len(self._listener_map[channel]) + 1, match_type, callback
-        )
+        entry = ListenerData(len(self._listener_map[channel]) + 1, match_type, callback)
         self._listener_map[channel].append(entry)
         return ListenerHandle(self, channel, entry.handle_id)
 
-    def unregister_listener_by_handle(self, handle: ListenerHandle):
+    def unregister_listener_handle(self, handle: ListenerHandle):
         assert handle.is_valid()
-        assert handle.subsystem_ref() is self
+        assert handle.router_ref() is self
         self.unregister_listener(handle.channel, handle.id)
 
     def unregister_listener(self, channel: str | EasyTag, handle_id: int):
@@ -106,5 +114,5 @@ class MessageSubsystem(metaclass=SingletonMeta):
         return f"{self.__class__.__name__}({self.__dict__})"
 
 
-class SocketMessageSubsystem(metaclass=SingletonMeta):
-    _listener_map: Dict[EasyTag, List[MessageListenerData]]
+# class SocketMessageSubsystem(metaclass=SingletonMeta):
+#     _listener_map: Dict[EasyTag, List[MessageListenerData]]

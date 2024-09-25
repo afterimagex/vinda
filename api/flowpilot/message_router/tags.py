@@ -1,3 +1,19 @@
+# ------------------------------------------------------------------------
+# Copyright (c) 2017-present, Pvening. All Rights Reserved.
+#
+# Licensed under the BSD 2-Clause License,
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://opensource.org/licenses/BSD-2-Clause
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ------------------------------------------------------------------------
+
 from flowpilot.common.utils import SingletonMeta
 
 
@@ -16,7 +32,7 @@ class EasyTag:
         return hash(self.tag_name)
 
     def __repr__(self):
-        return f"EasyTag({self.tag_name})"
+        return f"{self.__class__.__name__}({self.tag_name})"
 
     def matches(self, other) -> bool:
         """Check if the tag matches another tag or a part of it."""
@@ -63,7 +79,7 @@ class EasyTagContainer:
         return all(self.has_tag(tag) for tag in tags)
 
     def __repr__(self):
-        return f"EasyTagContainer({list(self.tags)})"
+        return f"{self.__class__.__name__}({list(self.tags)})"
 
 
 class EasyTagQuery:
@@ -82,7 +98,7 @@ class EasyTagQuery:
             raise ValueError(f"Unknown query type: {self.query_type}")
 
     def __repr__(self):
-        return f"EasyTagQuery({self.query_type}, {self.tags})"
+        return f"{self.__class__.__name__}({self.query_type}, {self.tags})"
 
 
 class EasyTagManager(metaclass=SingletonMeta):
@@ -99,7 +115,7 @@ class EasyTagManager(metaclass=SingletonMeta):
         return self._tags.get(tag_name, None)
 
     def __repr__(self):
-        return f"EasyTagManager({list(self._tags.keys())})"
+        return f"{self.__class__.__name__}({list(self._tags.keys())})"
 
 
 # Example Usage

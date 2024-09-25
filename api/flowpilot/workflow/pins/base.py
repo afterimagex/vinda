@@ -18,7 +18,7 @@ import copy
 import json
 from abc import ABC
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, Optional, Set
+from typing import TYPE_CHECKING, Any, Iterator, Optional, Set
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -84,33 +84,28 @@ class Pin:
 
     id: str
     name: Optional[str]
-    # type: PinType.Categories
     direction: Direction
     links: Set[str]
-    value: Optional[str]
+
     owning_node: Optional[str]
     _version: int = 1
 
     def __init__(
         self,
         name: Optional[str] = None,
-        # type: PinType.Categories = PinType.Categories.String,
         direction: Direction = Direction.INPUT,
     ) -> None:
         super().__setattr__("id", str(uuid4()))
         super().__setattr__("name", name)
-        # super().__setattr__("type", type)
         super().__setattr__("direction", direction)
         super().__setattr__("links", set())
-        super().__setattr__("value", None)
         super().__setattr__("owning_node", None)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__})"
 
     def modify(self) -> None:
-        if self.direction == Direction.INPUT:
-            assert len(self.links) <= 1, "maximum one link for input pins"
+        pass
 
     def link(self, other: "Pin") -> None:
         """Link to another pin"""
@@ -166,6 +161,42 @@ class Pin:
         cls = self()
         cls.load(json.loads(state))
         return cls
+
+
+class DataPin(Pin):
+    value: Optional[str]
+
+    def __init__(
+        self, name: str | None = None, direction: Direction = Direction.INPUT
+    ) -> None:
+        super().__init__(name, direction)
+        super().__setattr__("value", None)
+
+    def set(self, value: Any):
+        self.value = value
+
+    def __call__(self):
+        return self.value
+
+    def modify(self) -> None:
+        if self.direction == Direction.INPUT:
+            assert len(self.links) <= 1, "maximum one link for input pins"
+
+    def reset(self):
+        self.value = None
+
+
+class ExecPin(Pin):
+
+    def emit(self, ctx: "GraphContext"):
+        if self.direction == Direction.INPUT:
+            node = ctx.get_pin_node(self.id)
+            node.execute()
+        elif self.direction == Direction.OUTPUT:
+            for link in self.links:
+                pin = ctx.get_pin(link)
+                if isinstance(pin, ExecPin) and pin.direction == Direction.INPUT:
+                    pin.emit(ctx)
 
 
 if __name__ == "__main__":
